@@ -1,5 +1,5 @@
 ![Banner](assets/banner.png)
-# py-chiptune
+# flexinfer-chiptune
 
 A Python library for generating 8-bit/16-bit style MIDI music and sound effects with a semantic API that agents can use to programmatically compose music.
 
@@ -16,13 +16,13 @@ A Python library for generating 8-bit/16-bit style MIDI music and sound effects 
 ## Installation
 
 ```bash
-pip install py-chiptune
+pip install flexinfer-chiptune
 ```
 
 Or with uv:
 
 ```bash
-uv add py-chiptune
+uv add flexinfer-chiptune
 ```
 
 ## Quick Start
@@ -168,7 +168,7 @@ Game sound effects:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourorg/py-chiptune.git
+git clone https://gitlab.flexinfer.ai/libs/py-chiptune.git
 cd py-chiptune
 
 # Install dependencies

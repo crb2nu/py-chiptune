@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "py-chiptune"
-version = "0.1.0"
+name = "flexinfer-chiptune"
+version = "0.2.0"
 description = "Retro game music generation library with semantic API for 8-bit/16-bit style MIDI composition"
 readme = "README.md"
 requires-python = ">=3.11"
