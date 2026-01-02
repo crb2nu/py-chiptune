@@ -1,3 +1,4 @@
+![Banner](assets/banner.png)
 # py-chiptune
 
 A Python library for generating 8-bit/16-bit style MIDI music and sound effects with a semantic API that agents can use to programmatically compose music.
