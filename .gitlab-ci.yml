@@ -2,9 +2,12 @@ stages:
   - lint
   - test
   - build
+  - publish
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  # Safety: only publish to public PyPI when explicitly enabled.
+  PUBLISH_PUBLIC_PYPI: "false"
 
 cache:
   key: ${CI_COMMIT_REF_SLUG}
@@ -66,3 +69,29 @@ build:
       - dist/
   rules:
     - if: $CI_COMMIT_TAG
+
+publish:
+  <<: *python-setup
+  stage: publish
+  script:
+    - python -m pip install build twine
+    - python -m build
+    - export TWINE_USERNAME=gitlab-ci-token
+    - export TWINE_PASSWORD="${CI_JOB_TOKEN}"
+    - twine upload --repository-url ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi dist/*
+  rules:
+    - if: $CI_COMMIT_TAG
+  when: manual
+
+publish:pypi:
+  <<: *python-setup
+  stage: publish
+  script:
+    - python -m pip install build twine
+    - python -m build
+    - export TWINE_USERNAME=__token__
+    - export TWINE_PASSWORD="${PYPI_API_TOKEN}"
+    - twine upload --repository-url https://upload.pypi.org/legacy/ dist/*
+  rules:
+    - if: '$CI_COMMIT_TAG && $PUBLISH_PUBLIC_PYPI == "true"'
+  when: manual
