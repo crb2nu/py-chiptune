@@ -11,6 +11,8 @@ variables:
   PIP_TRUSTED_HOST: "devpi.ci.svc.cluster.local"
   # uv defaults to https://pypi.org/simple; override so it only uses devpi.
   UV_DEFAULT_INDEX: "$PIP_INDEX_URL"
+  # Add PyPI as a fallback when devpi returns 5xx for specific artifacts.
+  UV_INDEX: "https://pypi.org/simple"
   UV_NATIVE_TLS: "true"
   # Safety: only publish to public PyPI when explicitly enabled.
   PUBLISH_PUBLIC_PYPI: "false"
