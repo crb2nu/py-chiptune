@@ -6,6 +6,12 @@ stages:
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  # Prefer internal package proxy to avoid external TLS/cert issues.
+  PIP_INDEX_URL: "http://devpi.ci.svc.cluster.local:3141/root/pypi/+simple/"
+  PIP_TRUSTED_HOST: "devpi.ci.svc.cluster.local"
+  # uv defaults to https://pypi.org/simple; override so it only uses devpi.
+  UV_DEFAULT_INDEX: "$PIP_INDEX_URL"
+  UV_NATIVE_TLS: "true"
   # Safety: only publish to public PyPI when explicitly enabled.
   PUBLISH_PUBLIC_PYPI: "false"
 
