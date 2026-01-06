@@ -118,7 +118,7 @@ class LFO(BaseModel):
             LFO values ranging from 0 to depth
         """
         bipolar = self.generate(num_samples, sample_rate)
-        return (bipolar + self.depth) / 2
+        return ((bipolar + self.depth) / 2).astype(np.float32)
 
     @classmethod
     def vibrato(cls, rate: float = 5.0, depth: float = 0.5) -> "LFO":

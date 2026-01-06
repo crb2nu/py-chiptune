@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
@@ -57,7 +57,7 @@ class ThemeTemplate(BaseModel):
     loop_friendly: bool = True
 
     # Theme-specific default configurations
-    THEME_CONFIGS: ClassVar[dict[GameTheme, dict]] = {
+    THEME_CONFIGS: ClassVar[dict[GameTheme, dict[str, Any]]] = {
         GameTheme.TITLE_SCREEN: {
             "tempo": 110,
             "mode": Mode.IONIAN,

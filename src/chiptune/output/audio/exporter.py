@@ -63,7 +63,9 @@ class AudioExporter(BaseModel):
     def _get_envelope(self, channel_type: ChannelType) -> ADSREnvelope:
         """Get appropriate envelope for channel type."""
         envelope_name = self.CHANNEL_ENVELOPES.get(channel_type, "chip_lead")
-        return getattr(ADSREnvelope, envelope_name)()
+        envelope_factory = getattr(ADSREnvelope, envelope_name)
+        result: ADSREnvelope = envelope_factory()
+        return result
 
     def render_channel(
         self,
@@ -84,6 +86,9 @@ class AudioExporter(BaseModel):
         beats_per_second = bpm / 60.0
 
         # Select waveform generator based on channel type
+        from chiptune.output.audio.waveforms import WaveformGenerator
+
+        generator: WaveformGenerator
         if channel.channel_type == ChannelType.PULSE:
             generator = PulseWaveGenerator(
                 duty=channel.duty_cycle,
@@ -125,7 +130,7 @@ class AudioExporter(BaseModel):
             if channel.channel_type == ChannelType.NOISE:
                 # Noise uses pitch as period index (0-15)
                 samples = generator.generate(
-                    period=note.pitch,
+                    frequency=float(note.pitch),
                     duration=duration_seconds,
                 )
             else:
@@ -226,7 +231,9 @@ class AudioExporter(BaseModel):
         try:
             import soundfile as sf
         except ImportError as e:
-            raise ImportError("soundfile not installed. Install with: pip install soundfile") from e
+            raise ImportError(
+                "soundfile not installed. Install with: pip install soundfile"
+            ) from e
 
         stereo = self.render_track(track, effects=effects)
         sf.write(path, stereo, self.sample_rate, subtype="PCM_16")
@@ -247,7 +254,9 @@ class AudioExporter(BaseModel):
         try:
             import soundfile as sf
         except ImportError as e:
-            raise ImportError("soundfile not installed. Install with: pip install soundfile") from e
+            raise ImportError(
+                "soundfile not installed. Install with: pip install soundfile"
+            ) from e
 
         stereo = self.render_track(track, effects=effects)
         sf.write(path, stereo, self.sample_rate, format="OGG", subtype="VORBIS")
@@ -271,7 +280,9 @@ class AudioExporter(BaseModel):
         try:
             import soundfile as sf
         except ImportError as e:
-            raise ImportError("soundfile not installed. Install with: pip install soundfile") from e
+            raise ImportError(
+                "soundfile not installed. Install with: pip install soundfile"
+            ) from e
 
         stereo = self.render_track(track, effects=effects)
         buffer = BytesIO()
@@ -312,7 +323,9 @@ class AudioExporter(BaseModel):
         try:
             import soundfile as sf
         except ImportError as e:
-            raise ImportError("soundfile not installed. Install with: pip install soundfile") from e
+            raise ImportError(
+                "soundfile not installed. Install with: pip install soundfile"
+            ) from e
 
         buffer = BytesIO()
         sf.write(buffer, stereo, self.sample_rate, format="WAV", subtype="PCM_16")

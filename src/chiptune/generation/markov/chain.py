@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Hashable
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -26,8 +26,8 @@ class MarkovChain(BaseModel, Generic[T]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     order: int = Field(default=2, ge=1, le=5)
-    transitions: dict[tuple, dict[T, int]] = Field(default_factory=dict)
-    start_states: list[tuple] = Field(default_factory=list)
+    transitions: dict[tuple[Any, ...], dict[T, int]] = Field(default_factory=dict)
+    start_states: list[tuple[Any, ...]] = Field(default_factory=list)
 
     def train(self, sequence: list[T]) -> None:
         """Train the chain on a sequence.

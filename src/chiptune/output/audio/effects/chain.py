@@ -1,5 +1,6 @@
 """Effect chain for combining multiple effects."""
 
+from collections.abc import Iterator
 from typing import Union
 
 import numpy as np
@@ -67,7 +68,8 @@ class EffectChain(BaseModel):
     def __len__(self) -> int:
         return len(self.effects)
 
-    def __iter__(self):
+    def iter_effects(self) -> Iterator[SampleEffect]:
+        """Iterate over effects in the chain."""
         return iter(self.effects)
 
 
@@ -204,7 +206,9 @@ class EffectPresets:
         return EffectChain(
             effects=[
                 Ensemble.synth_pad(),
-                TapeDelay(delay_time=0.5, feedback=0.55, mix=0.4, tape_age=0.3, highcut=3000),
+                TapeDelay(
+                    delay_time=0.5, feedback=0.55, mix=0.4, tape_age=0.3, highcut=3000
+                ),
                 Tremolo(rate=1.5, depth=0.2),
             ]
         )

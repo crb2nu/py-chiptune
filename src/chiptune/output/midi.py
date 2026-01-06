@@ -7,12 +7,17 @@ played in any DAW or synthesizer.
 from __future__ import annotations
 
 from io import BytesIO
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from midiutil import MIDIFile
 from pydantic import BaseModel
 
 from chiptune.chip.channels import ChannelType, NESChannels
+
+if TYPE_CHECKING:
+    from chiptune.composer.composer import Track
+    from chiptune.patterns.jingles import Jingle
+    from chiptune.theory.arpeggios import Note
 
 
 class MidiExporter(BaseModel):
@@ -53,11 +58,13 @@ class MidiExporter(BaseModel):
     def _get_instrument(self, channel_type: ChannelType) -> int:
         """Get MIDI program number for channel type."""
         instruments = (
-            self.AUTHENTIC_INSTRUMENTS if self.use_authentic_instruments else self.INSTRUMENT_MAP
+            self.AUTHENTIC_INSTRUMENTS
+            if self.use_authentic_instruments
+            else self.INSTRUMENT_MAP
         )
         return instruments.get(channel_type, 80)
 
-    def export_bytes(self, track) -> bytes:
+    def export_bytes(self, track: Track) -> bytes:
         """Export a Track to MIDI bytes.
 
         Args:
@@ -108,7 +115,7 @@ class MidiExporter(BaseModel):
         midi.writeFile(buffer)
         return buffer.getvalue()
 
-    def export_file(self, track, path: str) -> None:
+    def export_file(self, track: Track, path: str) -> None:
         """Export a Track to a MIDI file.
 
         Args:
@@ -119,7 +126,7 @@ class MidiExporter(BaseModel):
         with open(path, "wb") as f:
             f.write(midi_bytes)
 
-    def export_jingle_bytes(self, jingle) -> bytes:
+    def export_jingle_bytes(self, jingle: Jingle) -> bytes:
         """Export a Jingle to MIDI bytes.
 
         Args:
@@ -157,7 +164,7 @@ class MidiExporter(BaseModel):
         midi.writeFile(buffer)
         return buffer.getvalue()
 
-    def export_jingle_file(self, jingle, path: str) -> None:
+    def export_jingle_file(self, jingle: Jingle, path: str) -> None:
         """Export a Jingle to a MIDI file.
 
         Args:
@@ -168,7 +175,7 @@ class MidiExporter(BaseModel):
         with open(path, "wb") as f:
             f.write(midi_bytes)
 
-    def export_sfx_bytes(self, notes: list, tempo: int = 120) -> bytes:
+    def export_sfx_bytes(self, notes: list[Note], tempo: int = 120) -> bytes:
         """Export a list of notes as a sound effect.
 
         Args:

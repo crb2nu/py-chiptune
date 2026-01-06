@@ -128,7 +128,10 @@ class Arpeggio(BaseModel):
             List of Note objects
         """
         sequence = self._generate_sequence()
-        return [Note(pitch=p, duration=self.note_duration, velocity=velocity) for p in sequence]
+        return [
+            Note(pitch=p, duration=self.note_duration, velocity=velocity)
+            for p in sequence
+        ]
 
     def repeat(self, times: int) -> list[Note]:
         """Generate repeated arpeggio cycles.
@@ -192,9 +195,31 @@ class RapidArpeggio(Arpeggio):
         chord: Chord,
         octave: int = 4,
         pattern: ArpeggioPattern = ArpeggioPattern.UP,
-        speed: str = "fast",
+        note_duration: float = 0.0625,
     ) -> RapidArpeggio:
         """Create a rapid arpeggio from a chord.
+
+        Args:
+            chord: The chord to arpeggiate
+            octave: Base octave
+            pattern: Arpeggio pattern
+            note_duration: Duration per note in beats (default 64th note)
+
+        Returns:
+            RapidArpeggio instance
+        """
+        pitches = chord.get_pitches(octave=octave)
+        return cls(pitches=pitches, pattern=pattern, note_duration=note_duration)
+
+    @classmethod
+    def from_chord_speed(
+        cls,
+        chord: Chord,
+        octave: int = 4,
+        pattern: ArpeggioPattern = ArpeggioPattern.UP,
+        speed: str = "fast",
+    ) -> RapidArpeggio:
+        """Create a rapid arpeggio from a chord using speed preset.
 
         Args:
             chord: The chord to arpeggiate

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
@@ -65,7 +65,7 @@ class Vibrato(ChipEffect):
     delay_beats: float = 0.25  # Delay before vibrato starts
 
     # Preset vibrato styles
-    STYLES: ClassVar[dict[str, dict]] = {
+    STYLES: ClassVar[dict[str, dict[str, Any]]] = {
         "subtle": {"speed": 4.0, "depth": 1, "delay_beats": 0.5},
         "expressive": {"speed": 6.0, "depth": 2, "delay_beats": 0.25},
         "fast": {"speed": 10.0, "depth": 1, "delay_beats": 0.125},
@@ -152,7 +152,7 @@ class VolumeEnvelope(ChipEffect):
     release_time: float = 0.1  # Time to fade to zero (beats)
 
     # Preset envelopes
-    PRESETS: ClassVar[dict[str, dict]] = {
+    PRESETS: ClassVar[dict[str, dict[str, Any]]] = {
         "pluck": {
             "attack_time": 0.0,
             "decay_time": 0.2,

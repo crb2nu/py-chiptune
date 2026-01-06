@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from chiptune.generation.markov.chain import WeightedMarkovChain
@@ -49,7 +51,7 @@ class MarkovMelodyGenerator(BaseModel):
         default_factory=lambda: WeightedMarkovChain[float](order=2)
     )
 
-    def model_post_init(self, __context) -> None:
+    def model_post_init(self, __context: Any) -> None:
         """Initialize chains with correct order and temperature."""
         self.interval_chain.order = self.order
         self.interval_chain.temperature = self.temperature
@@ -181,7 +183,9 @@ class MarkovMelodyGenerator(BaseModel):
         for note in raw_notes:
             # Find closest scale pitch
             closest = min(scale_pitches, key=lambda p: abs(p - note.pitch))
-            result.append(Note(pitch=closest, duration=note.duration, velocity=note.velocity))
+            result.append(
+                Note(pitch=closest, duration=note.duration, velocity=note.velocity)
+            )
 
         return result
 

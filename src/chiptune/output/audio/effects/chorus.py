@@ -66,7 +66,9 @@ class Chorus(SampleEffect):
             voice_rate = self.rate * (1.0 + voice * 0.1)
             voice_phase = voice / self.voices
 
-            lfo = LFO(rate=voice_rate, depth=1.0, shape=LFOShape.SINE, phase=voice_phase)
+            lfo = LFO(
+                rate=voice_rate, depth=1.0, shape=LFOShape.SINE, phase=voice_phase
+            )
             modulation = lfo.generate(len(samples), sample_rate)
 
             # Calculate delay for each sample
@@ -84,22 +86,26 @@ class Chorus(SampleEffect):
             # and subtle lowpass for warmth
             nyquist = sample_rate / 2
             b_hp, a_hp = scipy_signal.butter(1, 80 / nyquist, btype="high")
-            voice_output = scipy_signal.lfilter(b_hp, a_hp, voice_output)
+            filtered: NDArray[np.float32] = scipy_signal.lfilter(
+                b_hp, a_hp, voice_output
+            ).astype(np.float32)
 
             # Voice level (center voice slightly louder)
             center = self.voices // 2
             distance = abs(voice - center)
             level = 1.0 - distance * 0.15
 
-            output += voice_output.astype(np.float32) * level
+            output += filtered * level
 
         # Normalize by number of voices
-        output = output / self.voices
+        output = (output / self.voices).astype(np.float32)
 
         # Mix dry and wet
-        result = samples * (1 - self.mix) + output * self.mix
+        result: NDArray[np.float32] = (
+            samples * (1 - self.mix) + output * self.mix
+        ).astype(np.float32)
 
-        return result.astype(np.float32)
+        return result
 
     @classmethod
     def subtle(cls) -> "Chorus":
@@ -179,11 +185,15 @@ class Unison(SampleEffect):
             if resampled_len > 0:
                 # Resample
                 indices = np.linspace(0, original_len - 1, resampled_len)
-                resampled = np.interp(indices, np.arange(original_len), samples)
+                resampled: NDArray[np.float32] = np.interp(
+                    indices, np.arange(original_len), samples
+                ).astype(np.float32)
 
                 # Pad or trim to match original length
                 if len(resampled) < original_len:
-                    padded = np.zeros(original_len, dtype=np.float32)
+                    padded: NDArray[np.float32] = np.zeros(
+                        original_len, dtype=np.float32
+                    )
                     padded[: len(resampled)] = resampled
                     resampled = padded
                 else:
@@ -191,15 +201,19 @@ class Unison(SampleEffect):
 
                 # Voice level decreases with distance from center
                 level = 1.0 / (voice + 1)
-                output += resampled.astype(np.float32) * level
+                output += resampled * level
 
         # Normalize
-        output = output / (1 + sum(1.0 / (v + 1) for v in range(1, self.voices)))
+        output = (
+            output / (1 + sum(1.0 / (v + 1) for v in range(1, self.voices)))
+        ).astype(np.float32)
 
         # Mix
-        result = samples * (1 - self.mix) + output * self.mix
+        result: NDArray[np.float32] = (
+            samples * (1 - self.mix) + output * self.mix
+        ).astype(np.float32)
 
-        return result.astype(np.float32)
+        return result
 
     @classmethod
     def supersaw(cls) -> "Unison":
@@ -264,11 +278,15 @@ class Ensemble(SampleEffect):
 
             if resampled_len > 0:
                 indices = np.linspace(0, original_len - 1, resampled_len)
-                resampled = np.interp(indices, np.arange(original_len), samples)
+                resampled: NDArray[np.float32] = np.interp(
+                    indices, np.arange(original_len), samples
+                ).astype(np.float32)
 
                 # Pad to original length
                 if len(resampled) < original_len:
-                    padded = np.zeros(original_len, dtype=np.float32)
+                    padded: NDArray[np.float32] = np.zeros(
+                        original_len, dtype=np.float32
+                    )
                     padded[: len(resampled)] = resampled
                     resampled = padded
                 else:
@@ -276,26 +294,26 @@ class Ensemble(SampleEffect):
 
                 # Apply delay
                 if delay_samples > 0:
-                    delayed = np.zeros_like(resampled)
+                    delayed: NDArray[np.float32] = np.zeros_like(resampled)
                     delayed[delay_samples:] = resampled[:-delay_samples]
                     resampled = delayed
 
                 # Add slow random drift (simulates human/analog variation)
                 if self.drift > 0:
                     drift_lfo = LFO(
-                        rate=rng.uniform(0.2, 0.8),
+                        rate=float(rng.uniform(0.2, 0.8)),
                         depth=self.drift * 0.003,
                         shape=LFOShape.SINE,
-                        phase=rng.uniform(0, 1),
+                        phase=float(rng.uniform(0, 1)),
                     )
                     drift = drift_lfo.generate(len(resampled), sample_rate)
                     # Apply as subtle amplitude variation
-                    resampled = resampled * (1 + drift)
+                    resampled = (resampled * (1 + drift)).astype(np.float32)
 
-                output += resampled.astype(np.float32)
+                output += resampled
 
         # Normalize by ensemble size
-        output = output / self.size
+        output = (output / self.size).astype(np.float32)
 
         # Apply warmth (subtle lowpass)
         if self.warmth > 0:
@@ -305,9 +323,11 @@ class Ensemble(SampleEffect):
             output = scipy_signal.lfilter(b, a, output).astype(np.float32)
 
         # Mix
-        result = samples * (1 - self.mix) + output * self.mix
+        result: NDArray[np.float32] = (
+            samples * (1 - self.mix) + output * self.mix
+        ).astype(np.float32)
 
-        return result.astype(np.float32)
+        return result
 
     @classmethod
     def strings(cls) -> "Ensemble":

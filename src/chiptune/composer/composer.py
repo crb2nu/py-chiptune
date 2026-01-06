@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import random
 from enum import Enum
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
@@ -21,7 +21,7 @@ from chiptune.chip.channels import (
 )
 from chiptune.patterns.themes import GameTheme, MelodicContour, ThemeTemplate
 from chiptune.theory.arpeggios import Arpeggio, ArpeggioPattern, Note
-from chiptune.theory.chords import ChordProgression
+from chiptune.theory.chords import Chord, ChordProgression
 from chiptune.theory.keys import Key, Mode
 from chiptune.theory.scales import Scale
 
@@ -87,7 +87,7 @@ class ChiptuneComposer(BaseModel):
     progression: ChordProgression | None = None
 
     # Mood to musical settings mapping
-    MOOD_SETTINGS: ClassVar[dict[str, dict]] = {
+    MOOD_SETTINGS: ClassVar[dict[str, dict[str, Any]]] = {
         "heroic": {"mode": Mode.IONIAN, "tempo_mod": 1.1, "intensity": 0.8},
         "epic": {"mode": Mode.LYDIAN, "tempo_mod": 1.0, "intensity": 0.9},
         "mysterious": {"mode": Mode.DORIAN, "tempo_mod": 0.8, "intensity": 0.5},
@@ -274,7 +274,9 @@ class ChiptuneComposer(BaseModel):
 
                 # Calculate pitch based on contour
                 progress = current_beat / total_beats
-                pitch_index = self._contour_to_index(contour, progress, len(scale_pitches))
+                pitch_index = self._contour_to_index(
+                    contour, progress, len(scale_pitches)
+                )
 
                 pitch = scale_pitches[pitch_index]
                 velocity = random.randint(80, 110)
@@ -284,7 +286,9 @@ class ChiptuneComposer(BaseModel):
 
         return notes
 
-    def _contour_to_index(self, contour: MelodicContour, progress: float, max_index: int) -> int:
+    def _contour_to_index(
+        self, contour: MelodicContour, progress: float, max_index: int
+    ) -> int:
         """Convert contour and progress to scale index."""
         import math
 
@@ -348,12 +352,15 @@ class ChiptuneComposer(BaseModel):
             # Default to a simple I-IV-V-I
             self.set_progression(["I", "IV", "V", "I"])
 
+        assert self.progression is not None  # Set above if None
         chords = self.progression.get_chords()
         beats_per_chord = 4  # One bar per chord
         notes: list[Note] = []
 
         for chord in chords:
-            bass_notes = self._generate_bass_for_chord(chord, style, beats_per_chord, octave=3)
+            bass_notes = self._generate_bass_for_chord(
+                chord, style, beats_per_chord, octave=3
+            )
             notes.extend(bass_notes)
 
         self.parts.append(Part(role=PartRole.BASS, notes=notes, priority=8))
@@ -366,7 +373,7 @@ class ChiptuneComposer(BaseModel):
 
     def _generate_bass_for_chord(
         self,
-        chord,
+        chord: Chord,
         style: BassStyle,
         beats: float,
         octave: int,
@@ -393,7 +400,9 @@ class ChiptuneComposer(BaseModel):
                 note_duration = beats / len(pitches)
                 for i, pitch in enumerate(pitches):
                     vel = 100 if i == 0 else 85
-                    notes.append(Note(pitch=pitch, duration=note_duration, velocity=vel))
+                    notes.append(
+                        Note(pitch=pitch, duration=note_duration, velocity=vel)
+                    )
 
             case BassStyle.ARPEGGIATED:
                 # Quick arpeggio on bass
@@ -419,6 +428,7 @@ class ChiptuneComposer(BaseModel):
         if not self.progression:
             self.set_progression(["I", "IV", "V", "I"])
 
+        assert self.progression is not None  # Set above if None
         chords = self.progression.get_chords()
         beats_per_chord = 4
         notes: list[Note] = []

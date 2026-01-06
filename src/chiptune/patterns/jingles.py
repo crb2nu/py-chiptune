@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
@@ -42,7 +42,7 @@ class Jingle(BaseModel):
 
     # Jingle templates: (scale_degrees, durations, velocities)
     # Scale degrees are 1-indexed (1 = root, 3 = third, 5 = fifth, 8 = octave)
-    TEMPLATES: ClassVar[dict[JingleType, dict]] = {
+    TEMPLATES: ClassVar[dict[JingleType, dict[str, Any]]] = {
         JingleType.VICTORY_FANFARE: {
             "degrees": [1, 3, 5, 8, 8, 5, 8],
             "durations": [0.25, 0.25, 0.25, 0.5, 0.25, 0.25, 1.0],
@@ -180,7 +180,9 @@ class Jingle(BaseModel):
         scale = Scale.from_key(key)
         notes = []
 
-        for degree, duration, velocity in zip(degrees, durations, velocities, strict=False):
+        for degree, duration, velocity in zip(
+            degrees, durations, velocities, strict=False
+        ):
             pitch = scale.degree_to_pitch(degree, octave=octave)
             notes.append(
                 Note(
