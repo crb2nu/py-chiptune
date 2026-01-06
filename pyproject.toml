@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flexinfer-chiptune"
-version = "0.2.4"
-description = "Retro game music generation library with semantic API for 8-bit/16-bit style MIDI composition"
+version = "0.3.0"
+description = "Retro game music generation library with semantic API for 8-bit/16-bit style MIDI and audio composition"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -25,6 +25,7 @@ dependencies = [
     "midiutil>=1.2.1",
     "pydantic>=2.0.0",
     "numpy>=1.20.0",
+    "scipy>=1.10.0",
     "soundfile>=0.12.0",
 ]
 

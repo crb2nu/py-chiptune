@@ -14,7 +14,7 @@ from chiptune.theory.chords import Chord, ChordProgression
 from chiptune.theory.keys import Key
 from chiptune.theory.scales import Scale
 
-__version__ = "0.2.5"
+__version__ = "0.3.0"
 
 __all__ = [
     "ChiptuneComposer",

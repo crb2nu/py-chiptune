@@ -1,13 +1,13 @@
 """Audio file export for chiptune compositions.
 
 Renders tracks to WAV/OGG files with authentic NES-style
-waveforms and envelopes.
+waveforms and envelopes. Supports effects processing.
 """
 
 from __future__ import annotations
 
 from io import BytesIO
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, Optional, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -25,6 +25,7 @@ from chiptune.output.audio.waveforms import (
 
 if TYPE_CHECKING:
     from chiptune.composer.composer import Track
+    from chiptune.output.audio.effects import EffectChain, SampleEffect
     from chiptune.theory.arpeggios import Note
 
 
@@ -64,12 +65,18 @@ class AudioExporter(BaseModel):
         envelope_name = self.CHANNEL_ENVELOPES.get(channel_type, "chip_lead")
         return getattr(ADSREnvelope, envelope_name)()
 
-    def render_channel(self, channel: Channel, bpm: int) -> NDArray[np.float32]:
+    def render_channel(
+        self,
+        channel: Channel,
+        bpm: int,
+        effects: Optional[Union["EffectChain", "SampleEffect"]] = None,
+    ) -> NDArray[np.float32]:
         """Render a single channel to audio samples.
 
         Args:
             channel: Channel with notes
             bpm: Tempo in BPM
+            effects: Optional effect chain to apply
 
         Returns:
             Mono samples as float32 array
@@ -144,13 +151,31 @@ class AudioExporter(BaseModel):
 
             current_sample += num_samples
 
+        # Apply effects if provided
+        if effects is not None:
+            from chiptune.output.audio.effects import EffectChain, SampleEffect
+
+            if isinstance(effects, SampleEffect):
+                output = effects.process(output, self.sample_rate)
+            else:
+                output = effects.process(output, self.sample_rate)
+
         return output
 
-    def render_track(self, track: Track) -> NDArray[np.float32]:
+    def render_track(
+        self,
+        track: "Track",
+        effects: Optional[Union["EffectChain", "SampleEffect"]] = None,
+        channel_effects: Optional[
+            dict[int, Union["EffectChain", "SampleEffect"]]
+        ] = None,
+    ) -> NDArray[np.float32]:
         """Render a complete Track to stereo audio.
 
         Args:
             track: Composed Track object
+            effects: Master effects applied after mixing
+            channel_effects: Per-channel effects (keyed by channel_id)
 
         Returns:
             Stereo samples as (N, 2) float32 array
@@ -159,19 +184,46 @@ class AudioExporter(BaseModel):
 
         for channel in track.channels.all_channels:
             if channel.notes:
-                samples = self.render_channel(channel, track.bpm)
+                # Get channel-specific effects if provided
+                ch_effects = None
+                if channel_effects and channel.channel_id in channel_effects:
+                    ch_effects = channel_effects[channel.channel_id]
+
+                samples = self.render_channel(channel, track.bpm, effects=ch_effects)
                 if len(samples) > 0:
                     channel_samples[channel.channel_id] = samples
 
         mixer = ChannelMixer(sample_rate=self.sample_rate)
-        return mixer.mix(channel_samples)
+        stereo = mixer.mix(channel_samples)
 
-    def export_wav(self, track: Track, path: str) -> None:
+        # Apply master effects to mixed stereo output
+        if effects is not None:
+            from chiptune.output.audio.effects import EffectChain, SampleEffect
+
+            # Apply effects to each channel of stereo
+            left = stereo[:, 0]
+            right = stereo[:, 1]
+
+            if isinstance(effects, (SampleEffect, EffectChain)):
+                left = effects.process(left, self.sample_rate)
+                right = effects.process(right, self.sample_rate)
+
+            stereo = np.column_stack([left, right])
+
+        return stereo
+
+    def export_wav(
+        self,
+        track: "Track",
+        path: str,
+        effects: Optional[Union["EffectChain", "SampleEffect"]] = None,
+    ) -> None:
         """Export Track to WAV file.
 
         Args:
             track: Composed Track object
             path: Output file path
+            effects: Optional master effects to apply
         """
         try:
             import soundfile as sf
@@ -180,15 +232,21 @@ class AudioExporter(BaseModel):
                 "soundfile not installed. Install with: pip install soundfile"
             ) from e
 
-        stereo = self.render_track(track)
+        stereo = self.render_track(track, effects=effects)
         sf.write(path, stereo, self.sample_rate, subtype="PCM_16")
 
-    def export_ogg(self, track: Track, path: str) -> None:
+    def export_ogg(
+        self,
+        track: "Track",
+        path: str,
+        effects: Optional[Union["EffectChain", "SampleEffect"]] = None,
+    ) -> None:
         """Export Track to OGG Vorbis file.
 
         Args:
             track: Composed Track object
             path: Output file path
+            effects: Optional master effects to apply
         """
         try:
             import soundfile as sf
@@ -197,15 +255,21 @@ class AudioExporter(BaseModel):
                 "soundfile not installed. Install with: pip install soundfile"
             ) from e
 
-        stereo = self.render_track(track)
+        stereo = self.render_track(track, effects=effects)
         sf.write(path, stereo, self.sample_rate, format="OGG", subtype="VORBIS")
 
-    def export_bytes(self, track: Track, format: str = "wav") -> bytes:
+    def export_bytes(
+        self,
+        track: "Track",
+        format: str = "wav",
+        effects: Optional[Union["EffectChain", "SampleEffect"]] = None,
+    ) -> bytes:
         """Export Track to audio bytes.
 
         Args:
             track: Composed Track object
             format: "wav" or "ogg"
+            effects: Optional master effects to apply
 
         Returns:
             Audio file as bytes
@@ -217,7 +281,7 @@ class AudioExporter(BaseModel):
                 "soundfile not installed. Install with: pip install soundfile"
             ) from e
 
-        stereo = self.render_track(track)
+        stereo = self.render_track(track, effects=effects)
         buffer = BytesIO()
 
         if format == "ogg":
