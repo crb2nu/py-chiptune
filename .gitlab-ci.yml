@@ -1,71 +1,31 @@
-stages:
-  - lint
-  - test
-  - build
-  - publish
+# Python CI - Uses shared templates from platform/gitops
+include:
+  - project: 'platform/gitops'
+    file: '/ci/templates/python.yml'
+
+stages: [lint, test, build, publish]
 
 variables:
-  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-  # Prefer internal package proxy to avoid external TLS/cert issues.
-  PIP_INDEX_URL: "http://devpi.ci.svc.cluster.local:3141/root/pypi/+simple/"
-  PIP_TRUSTED_HOST: "devpi.ci.svc.cluster.local"
-  # Safety: only publish to public PyPI when explicitly enabled.
   PUBLISH_PUBLIC_PYPI: "false"
 
-cache:
-  key: ${CI_COMMIT_REF_SLUG}
-  paths:
-    - .cache/pip
-    - .venv/
-
-.python-setup: &python-setup
-  image: python:3.11-slim
-  before_script:
-    - python -m venv .venv
-    - source .venv/bin/activate
-    - pip install --upgrade pip
-    - pip install -e ".[dev]"
-
 lint:
-  <<: *python-setup
-  stage: lint
+  extends: .python-lint
   script:
     - ruff check src/ tests/
     - ruff format --check src/ tests/
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_COMMIT_TAG
 
 typecheck:
-  <<: *python-setup
+  extends: .python-base
   stage: lint
   script:
     - mypy src/ --ignore-missing-imports
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_COMMIT_TAG
   allow_failure: true
 
 test:
-  <<: *python-setup
-  stage: test
-  script:
-    - pytest --cov=src/chiptune --cov-report=xml --cov-report=term
-  coverage: '/TOTAL.*\s+(\d+%)/'
-  artifacts:
-    reports:
-      coverage_report:
-        coverage_format: cobertura
-        path: coverage.xml
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_COMMIT_TAG
+  extends: .python-test
 
 build:
-  <<: *python-setup
+  extends: .python-base
   stage: build
   script:
     - pip install build
@@ -77,25 +37,7 @@ build:
     - if: $CI_COMMIT_TAG
 
 publish:gitlab:
-  <<: *python-setup
-  stage: publish
-  script:
-    - python -m pip install build twine
-    - python -m build --wheel
-    - export TWINE_USERNAME=gitlab-ci-token
-    - export TWINE_PASSWORD="${CI_JOB_TOKEN}"
-    - twine upload --repository-url ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi dist/*.whl
-  rules:
-    - if: $CI_COMMIT_TAG
+  extends: .python-publish-gitlab
 
 publish:pypi:
-  <<: *python-setup
-  stage: publish
-  script:
-    - python -m pip install build twine
-    - python -m build --wheel
-    - export TWINE_USERNAME=__token__
-    - export TWINE_PASSWORD="${PYPI_API_TOKEN}"
-    - twine upload --repository-url https://upload.pypi.org/legacy/ dist/*.whl
-  rules:
-    - if: '$CI_COMMIT_TAG && $PUBLISH_PUBLIC_PYPI == "true"'
+  extends: .python-publish-pypi
