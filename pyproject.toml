@@ -25,15 +25,20 @@ dependencies = [
     "midiutil>=1.2.1",
     "pydantic>=2.0.0",
     "numpy>=1.20.0",
+    "soundfile>=0.12.0",
 ]
 
 [project.optional-dependencies]
+audio = [
+    "sounddevice>=0.4.6",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "mypy>=1.0.0",
     "ruff>=0.1.0",
     "pre-commit>=3.5.0",
+    "sounddevice>=0.4.6",
 ]
 
 [tool.hatch.build.targets.wheel]

@@ -529,3 +529,57 @@ class ChiptuneComposer(BaseModel):
         track = self.build()
         exporter = MidiExporter()
         exporter.export_file(track, path)
+
+    def to_audio_bytes(self, format: str = "wav") -> bytes:
+        """Export composition as audio bytes.
+
+        Args:
+            format: Audio format ("wav" or "ogg")
+
+        Returns:
+            Audio file as bytes
+        """
+        from chiptune.output.audio import AudioExporter
+
+        track = self.build()
+        exporter = AudioExporter()
+        return exporter.export_bytes(track, format=format)
+
+    def export_wav(self, path: str) -> None:
+        """Export composition to a WAV file.
+
+        Args:
+            path: Output file path
+        """
+        from chiptune.output.audio import AudioExporter
+
+        track = self.build()
+        exporter = AudioExporter()
+        exporter.export_wav(track, path)
+
+    def export_ogg(self, path: str) -> None:
+        """Export composition to an OGG file.
+
+        Args:
+            path: Output file path
+        """
+        from chiptune.output.audio import AudioExporter
+
+        track = self.build()
+        exporter = AudioExporter()
+        exporter.export_ogg(track, path)
+
+    def preview(self) -> None:
+        """Play the composition (requires sounddevice).
+
+        Renders and plays the audio. Blocks until complete.
+        Requires: pip install py-chiptune[audio]
+        """
+        from chiptune.output.audio import AudioExporter, AudioPlayer
+
+        track = self.build()
+        exporter = AudioExporter()
+        audio = exporter.render_track(track)
+
+        player = AudioPlayer()
+        player.play(audio)
