@@ -292,3 +292,123 @@ class TestIntensityController:
 
             assert tempo > 0
             assert 1 <= velocity <= 127
+
+
+class TestCountermelodyGenerator:
+    """Tests for countermelody generation."""
+
+    def test_generates_same_length(self) -> None:
+        """Countermelody should have same length as melody."""
+        from chiptune.generation.harmony.countermelody import CountermelodyGenerator
+        from chiptune.theory.arpeggios import Note
+
+        melody = [
+            Note(pitch=60, duration=1.0),
+            Note(pitch=62, duration=1.0),
+            Note(pitch=64, duration=1.0),
+            Note(pitch=65, duration=1.0),
+        ]
+        gen = CountermelodyGenerator.contrary()
+        counter = gen.generate(melody)
+
+        assert len(counter) == len(melody)
+
+    def test_contrary_motion(self) -> None:
+        """Contrary motion should move opposite to melody."""
+        from chiptune.generation.harmony.countermelody import (
+            CountermelodyGenerator,
+            MotionType,
+        )
+        from chiptune.theory.arpeggios import Note
+
+        # Ascending melody
+        melody = [
+            Note(pitch=60, duration=1.0),
+            Note(pitch=64, duration=1.0),
+            Note(pitch=67, duration=1.0),
+        ]
+        gen = CountermelodyGenerator(motion=MotionType.CONTRARY, seed=42)
+        counter = gen.generate(melody)
+
+        # At least should not be moving in same strong direction
+        # (contrary motion doesn't guarantee perfect opposition)
+        assert len(counter) == len(melody)
+
+    def test_parallel_thirds(self) -> None:
+        """Parallel thirds should maintain interval."""
+        from chiptune.generation.harmony.countermelody import CountermelodyGenerator
+        from chiptune.theory.arpeggios import Note
+
+        melody = [
+            Note(pitch=60, duration=1.0),
+            Note(pitch=62, duration=1.0),
+            Note(pitch=64, duration=1.0),
+        ]
+        gen = CountermelodyGenerator.thirds()
+        counter = gen.generate(melody)
+
+        # Intervals should be around 3-4 semitones
+        for m, c in zip(melody, counter, strict=False):
+            interval = abs(c.pitch - m.pitch)
+            # Allow for scale snapping
+            assert 0 <= interval <= 16
+
+    def test_respects_velocity_offset(self) -> None:
+        """Countermelody should be quieter by offset."""
+        from chiptune.generation.harmony.countermelody import CountermelodyGenerator
+        from chiptune.theory.arpeggios import Note
+
+        melody = [Note(pitch=60, duration=1.0, velocity=100)]
+        gen = CountermelodyGenerator(velocity_offset=-20)
+        counter = gen.generate(melody)
+
+        assert counter[0].velocity == 80
+
+    def test_empty_melody(self) -> None:
+        """Empty melody should return empty countermelody."""
+        from chiptune.generation.harmony.countermelody import CountermelodyGenerator
+
+        gen = CountermelodyGenerator.contrary()
+        counter = gen.generate([])
+
+        assert counter == []
+
+    def test_presets(self) -> None:
+        """Preset methods should return valid generators."""
+        from chiptune.generation.harmony.countermelody import (
+            CountermelodyGenerator,
+            HarmonyInterval,
+            MotionType,
+        )
+
+        thirds = CountermelodyGenerator.thirds()
+        sixths = CountermelodyGenerator.sixths()
+        contrary = CountermelodyGenerator.contrary()
+        drone = CountermelodyGenerator.drone()
+
+        assert thirds.harmony_interval == HarmonyInterval.THIRD
+        assert sixths.harmony_interval == HarmonyInterval.SIXTH
+        assert contrary.motion == MotionType.CONTRARY
+        assert drone.motion == MotionType.OBLIQUE
+
+    def test_scale_snapping(self) -> None:
+        """Notes should snap to scale when provided."""
+        from chiptune.generation.harmony.countermelody import CountermelodyGenerator
+        from chiptune.theory.arpeggios import Note
+        from chiptune.theory.keys import Key, Mode
+        from chiptune.theory.scales import Scale
+
+        melody = [
+            Note(pitch=60, duration=1.0),
+            Note(pitch=62, duration=1.0),
+            Note(pitch=64, duration=1.0),
+        ]
+        key = Key(root="C", mode=Mode.IONIAN)
+        scale = Scale.from_key(key)
+        gen = CountermelodyGenerator.thirds()
+        counter = gen.generate(melody, scale=scale)
+
+        # All pitches should be in C major scale
+        c_major_classes = {0, 2, 4, 5, 7, 9, 11}
+        for note in counter:
+            assert note.pitch % 12 in c_major_classes

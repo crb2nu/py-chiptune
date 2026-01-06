@@ -9,12 +9,18 @@ from chiptune.composer.agent_api import MusicAgent
 from chiptune.composer.composer import ChiptuneComposer
 from chiptune.output.audio import AudioExporter, AudioPlayer
 from chiptune.patterns.jingles import Jingle
+from chiptune.presets import (
+    ChipPresets,
+    EffectPresets,
+    GenrePresets,
+    QuickCompose,
+)
 from chiptune.sfx.effects import SFXGenerator
 from chiptune.theory.chords import Chord, ChordProgression
 from chiptune.theory.keys import Key
 from chiptune.theory.scales import Scale
 
-__version__ = "0.3.0"
+__version__ = "0.5.1"
 
 __all__ = [
     "ChiptuneComposer",
@@ -27,4 +33,9 @@ __all__ = [
     "Key",
     "AudioExporter",
     "AudioPlayer",
+    # Presets
+    "GenrePresets",
+    "EffectPresets",
+    "ChipPresets",
+    "QuickCompose",
 ]

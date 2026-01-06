@@ -408,3 +408,68 @@ class TestEffectDtype:
         for effect in effects:
             output = effect.process(samples, sample_rate=44100)
             assert output.dtype == np.float32, f"{type(effect).__name__} wrong dtype"
+
+
+class TestEcho:
+    """Tests for simple Echo effect."""
+
+    def test_creates_delayed_signal(self) -> None:
+        """Echo should create delayed copies of input."""
+        from chiptune.output.audio.effects import Echo
+
+        samples = np.zeros(44100, dtype=np.float32)
+        samples[0] = 1.0  # Impulse
+
+        echo = Echo(delay_time=0.1, feedback=0.5, mix=0.5)
+        output = echo.process(samples, sample_rate=44100)
+
+        # Should have echo at ~0.1 seconds (4410 samples)
+        assert np.max(np.abs(output[4400:4500])) > 0.1
+
+    def test_feedback_creates_multiple_echoes(self) -> None:
+        """Higher feedback should create more echo repeats."""
+        from chiptune.output.audio.effects import Echo
+
+        samples = np.zeros(44100, dtype=np.float32)
+        samples[0] = 1.0
+
+        echo = Echo(delay_time=0.1, feedback=0.6, mix=0.5, num_repeats=4)
+        output = echo.process(samples, sample_rate=44100)
+
+        # Should have energy at multiple delay positions
+        first_echo = np.max(np.abs(output[4400:4500]))
+        second_echo = np.max(np.abs(output[8800:8900]))
+
+        assert first_echo > second_echo  # Each repeat should be quieter
+
+    def test_presets(self) -> None:
+        """Echo presets should return valid instances."""
+        from chiptune.output.audio.effects import Echo
+
+        short = Echo.short()
+        medium = Echo.medium()
+        long_echo = Echo.long()
+        cavernous = Echo.cavernous()
+
+        assert short.delay_time < medium.delay_time < long_echo.delay_time
+        assert cavernous.feedback > medium.feedback
+
+    def test_rhythmic_preset(self) -> None:
+        """Rhythmic preset should calculate tempo-synced delay."""
+        from chiptune.output.audio.effects import Echo
+
+        echo_120 = Echo.rhythmic(bpm=120, subdivision=0.5)  # Eighth note
+        echo_60 = Echo.rhythmic(bpm=60, subdivision=0.5)
+
+        # Slower tempo = longer delay
+        assert echo_60.delay_time > echo_120.delay_time
+
+    def test_output_dtype(self) -> None:
+        """Echo should output float32."""
+        from chiptune.output.audio.effects import Echo
+
+        samples = np.random.randn(1000).astype(np.float32)
+        echo = Echo.medium()
+        output = echo.process(samples, sample_rate=44100)
+
+        assert output.dtype == np.float32

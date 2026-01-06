@@ -180,9 +180,7 @@ class Jingle(BaseModel):
         scale = Scale.from_key(key)
         notes = []
 
-        for degree, duration, velocity in zip(
-            degrees, durations, velocities, strict=False
-        ):
+        for degree, duration, velocity in zip(degrees, durations, velocities, strict=False):
             pitch = scale.degree_to_pitch(degree, octave=octave)
             notes.append(
                 Note(

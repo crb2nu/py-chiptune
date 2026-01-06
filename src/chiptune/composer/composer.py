@@ -274,9 +274,7 @@ class ChiptuneComposer(BaseModel):
 
                 # Calculate pitch based on contour
                 progress = current_beat / total_beats
-                pitch_index = self._contour_to_index(
-                    contour, progress, len(scale_pitches)
-                )
+                pitch_index = self._contour_to_index(contour, progress, len(scale_pitches))
 
                 pitch = scale_pitches[pitch_index]
                 velocity = random.randint(80, 110)
@@ -286,9 +284,7 @@ class ChiptuneComposer(BaseModel):
 
         return notes
 
-    def _contour_to_index(
-        self, contour: MelodicContour, progress: float, max_index: int
-    ) -> int:
+    def _contour_to_index(self, contour: MelodicContour, progress: float, max_index: int) -> int:
         """Convert contour and progress to scale index."""
         import math
 
@@ -358,9 +354,7 @@ class ChiptuneComposer(BaseModel):
         notes: list[Note] = []
 
         for chord in chords:
-            bass_notes = self._generate_bass_for_chord(
-                chord, style, beats_per_chord, octave=3
-            )
+            bass_notes = self._generate_bass_for_chord(chord, style, beats_per_chord, octave=3)
             notes.extend(bass_notes)
 
         self.parts.append(Part(role=PartRole.BASS, notes=notes, priority=8))
@@ -400,9 +394,7 @@ class ChiptuneComposer(BaseModel):
                 note_duration = beats / len(pitches)
                 for i, pitch in enumerate(pitches):
                     vel = 100 if i == 0 else 85
-                    notes.append(
-                        Note(pitch=pitch, duration=note_duration, velocity=vel)
-                    )
+                    notes.append(Note(pitch=pitch, duration=note_duration, velocity=vel))
 
             case BassStyle.ARPEGGIATED:
                 # Quick arpeggio on bass
@@ -481,6 +473,153 @@ class ChiptuneComposer(BaseModel):
         self.parts.append(Part(role=PartRole.PERCUSSION, notes=notes, priority=7))
 
         return self
+
+    def add_countermelody(
+        self,
+        motion: str = "contrary",
+        interval: str = "third",
+    ) -> ChiptuneComposer:
+        """Add a countermelody based on the existing melody.
+
+        Uses music theory rules to generate a harmonically correct
+        secondary melody that complements the main melody.
+
+        Args:
+            motion: Motion type ("contrary", "parallel", "oblique", "similar", "free")
+            interval: Harmony interval ("third", "sixth", "fifth", "octave")
+
+        Returns:
+            Self for chaining
+        """
+        from chiptune.generation.harmony.countermelody import (
+            CountermelodyGenerator,
+            HarmonyInterval,
+            MotionType,
+        )
+
+        # Find the melody part
+        melody_part = next((p for p in self.parts if p.role == PartRole.MELODY), None)
+        if not melody_part or not melody_part.notes:
+            return self  # No melody to harmonize
+
+        # Map strings to enums
+        motion_map = {
+            "contrary": MotionType.CONTRARY,
+            "parallel": MotionType.PARALLEL,
+            "oblique": MotionType.OBLIQUE,
+            "similar": MotionType.SIMILAR,
+            "free": MotionType.FREE,
+        }
+        interval_map = {
+            "third": HarmonyInterval.THIRD,
+            "sixth": HarmonyInterval.SIXTH,
+            "fifth": HarmonyInterval.FIFTH,
+            "octave": HarmonyInterval.OCTAVE,
+        }
+
+        motion_type = motion_map.get(motion.lower(), MotionType.CONTRARY)
+        harmony_interval = interval_map.get(interval.lower(), HarmonyInterval.THIRD)
+
+        # Generate countermelody
+        scale = Scale.from_key(self.key)
+        generator = CountermelodyGenerator(
+            motion=motion_type,
+            harmony_interval=harmony_interval,
+        )
+        counter_notes = generator.generate(melody_part.notes, scale=scale)
+
+        self.parts.append(Part(role=PartRole.COUNTER_MELODY, notes=counter_notes, priority=6))
+        return self
+
+    def set_intensity(
+        self,
+        profile: str = "dramatic",
+    ) -> ChiptuneComposer:
+        """Configure intensity profile for dynamic composition.
+
+        The intensity profile affects how musical parameters change
+        over the course of the piece (tempo feel, density, dynamics).
+
+        Args:
+            profile: Profile preset ("calm", "building", "dramatic", "battle",
+                     "exploration", "boss_fight")
+
+        Returns:
+            Self for chaining
+        """
+        from chiptune.generation.adaptive.intensity import IntensityProfile
+
+        # Get the profile
+        profile_map = {
+            "calm": IntensityProfile.calm,
+            "building": IntensityProfile.building,
+            "fading": IntensityProfile.fading,
+            "dramatic": IntensityProfile.dramatic,
+            "battle": IntensityProfile.battle,
+            "exploration": IntensityProfile.exploration,
+            "boss_fight": IntensityProfile.boss_fight,
+        }
+
+        profile_factory = profile_map.get(profile.lower(), IntensityProfile.dramatic)
+        intensity = profile_factory()
+
+        # Adjust BPM based on intensity curve start
+        start_intensity = intensity.get_intensity(0.0)
+        self.bpm = int(self.bpm * (0.8 + start_intensity * 0.4))
+
+        return self
+
+    def with_effect(
+        self,
+        effect_name: str,
+        **kwargs: Any,
+    ) -> tuple[ChiptuneComposer, Any]:
+        """Get an effect instance for use during audio export.
+
+        Returns the composer and effect for chaining. Use the effect
+        when calling export methods.
+
+        Args:
+            effect_name: Effect preset ("echo", "chorus", "delay", "tremolo")
+            **kwargs: Additional effect parameters
+
+        Returns:
+            Tuple of (self, effect) for use in export
+
+        Example:
+            composer, echo = composer.with_effect("echo", delay_time=0.3)
+            exporter.export_wav(track, "out.wav", effects=echo)
+        """
+        from chiptune.output.audio.effects import (
+            Chorus,
+            Echo,
+            TapeDelay,
+            Tremolo,
+        )
+
+        effect_map = {
+            "echo": Echo.medium,
+            "echo_short": Echo.short,
+            "echo_long": Echo.long,
+            "chorus": Chorus.classic,
+            "chorus_lush": Chorus.lush,
+            "delay": TapeDelay.space_echo,
+            "delay_slapback": TapeDelay.slapback,
+            "tremolo": Tremolo.classic,
+            "tremolo_subtle": Tremolo.subtle,
+        }
+
+        factory = effect_map.get(effect_name.lower())
+        if factory:
+            effect = factory()
+            # Apply any custom kwargs
+            for key, value in kwargs.items():
+                if hasattr(effect, key):
+                    setattr(effect, key, value)
+            return self, effect
+
+        # Return no effect if not found
+        return self, None
 
     def build(self) -> Track:
         """Build the final track.

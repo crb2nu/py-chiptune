@@ -5,6 +5,7 @@ This module provides a variety of effects for processing audio:
 Sample Effects (process audio samples):
 - Tremolo: Amplitude modulation
 - VibratoSample: Pitch modulation via delay
+- Echo: Simple clean digital delay
 - TapeDelay: Analog-style delay with character
 - MultiTapDelay: Rhythmic multi-tap delay
 - Chorus: Multiple detuned voices for depth
@@ -56,6 +57,7 @@ from chiptune.output.audio.effects.chain import (
     ParallelChain,
 )
 from chiptune.output.audio.effects.chorus import Chorus, Ensemble, Unison
+from chiptune.output.audio.effects.echo import Echo
 from chiptune.output.audio.effects.lfo import LFO, LFOShape
 from chiptune.output.audio.effects.pitch_sweep import (
     PitchBend,
@@ -78,6 +80,7 @@ __all__ = [
     # Sample effects
     "Tremolo",
     "VibratoSample",
+    "Echo",
     "TapeDelay",
     "MultiTapDelay",
     "Chorus",

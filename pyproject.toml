@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flexinfer-chiptune"
-version = "0.5.0"
+version = "0.5.1"
 description = "Retro game music generation library with semantic API for 8-bit/16-bit style MIDI and audio composition"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -41,6 +41,9 @@ dev = [
     "pre-commit>=3.5.0",
     "sounddevice>=0.4.6",
 ]
+
+[project.scripts]
+chiptune = "chiptune.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/chiptune"]

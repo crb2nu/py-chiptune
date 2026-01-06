@@ -66,9 +66,7 @@ class Chorus(SampleEffect):
             voice_rate = self.rate * (1.0 + voice * 0.1)
             voice_phase = voice / self.voices
 
-            lfo = LFO(
-                rate=voice_rate, depth=1.0, shape=LFOShape.SINE, phase=voice_phase
-            )
+            lfo = LFO(rate=voice_rate, depth=1.0, shape=LFOShape.SINE, phase=voice_phase)
             modulation = lfo.generate(len(samples), sample_rate)
 
             # Calculate delay for each sample
@@ -86,9 +84,9 @@ class Chorus(SampleEffect):
             # and subtle lowpass for warmth
             nyquist = sample_rate / 2
             b_hp, a_hp = scipy_signal.butter(1, 80 / nyquist, btype="high")
-            filtered: NDArray[np.float32] = scipy_signal.lfilter(
-                b_hp, a_hp, voice_output
-            ).astype(np.float32)
+            filtered: NDArray[np.float32] = scipy_signal.lfilter(b_hp, a_hp, voice_output).astype(
+                np.float32
+            )
 
             # Voice level (center voice slightly louder)
             center = self.voices // 2
@@ -101,9 +99,9 @@ class Chorus(SampleEffect):
         output = (output / self.voices).astype(np.float32)
 
         # Mix dry and wet
-        result: NDArray[np.float32] = (
-            samples * (1 - self.mix) + output * self.mix
-        ).astype(np.float32)
+        result: NDArray[np.float32] = (samples * (1 - self.mix) + output * self.mix).astype(
+            np.float32
+        )
 
         return result
 
@@ -191,9 +189,7 @@ class Unison(SampleEffect):
 
                 # Pad or trim to match original length
                 if len(resampled) < original_len:
-                    padded: NDArray[np.float32] = np.zeros(
-                        original_len, dtype=np.float32
-                    )
+                    padded: NDArray[np.float32] = np.zeros(original_len, dtype=np.float32)
                     padded[: len(resampled)] = resampled
                     resampled = padded
                 else:
@@ -204,14 +200,14 @@ class Unison(SampleEffect):
                 output += resampled * level
 
         # Normalize
-        output = (
-            output / (1 + sum(1.0 / (v + 1) for v in range(1, self.voices)))
-        ).astype(np.float32)
+        output = (output / (1 + sum(1.0 / (v + 1) for v in range(1, self.voices)))).astype(
+            np.float32
+        )
 
         # Mix
-        result: NDArray[np.float32] = (
-            samples * (1 - self.mix) + output * self.mix
-        ).astype(np.float32)
+        result: NDArray[np.float32] = (samples * (1 - self.mix) + output * self.mix).astype(
+            np.float32
+        )
 
         return result
 
@@ -284,9 +280,7 @@ class Ensemble(SampleEffect):
 
                 # Pad to original length
                 if len(resampled) < original_len:
-                    padded: NDArray[np.float32] = np.zeros(
-                        original_len, dtype=np.float32
-                    )
+                    padded: NDArray[np.float32] = np.zeros(original_len, dtype=np.float32)
                     padded[: len(resampled)] = resampled
                     resampled = padded
                 else:
@@ -323,9 +317,9 @@ class Ensemble(SampleEffect):
             output = scipy_signal.lfilter(b, a, output).astype(np.float32)
 
         # Mix
-        result: NDArray[np.float32] = (
-            samples * (1 - self.mix) + output * self.mix
-        ).astype(np.float32)
+        result: NDArray[np.float32] = (samples * (1 - self.mix) + output * self.mix).astype(
+            np.float32
+        )
 
         return result
 

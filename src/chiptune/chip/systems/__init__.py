@@ -1,10 +1,10 @@
 """Retro sound chip system emulators.
 
 This module provides emulations of classic sound chips:
-- NES 2A03 (via existing channels module)
-- Game Boy DMG
-- Commodore 64 SID
-- Sega Genesis YM2612
+- NES 2A03 (NES2A03)
+- Game Boy DMG (GameBoyChip)
+- Commodore 64 SID (SIDChip)
+- Sega Genesis YM2612 (GenesisChip)
 
 Each chip system provides:
 - Authentic voice/channel types
@@ -54,6 +54,13 @@ from chiptune.chip.systems.genesis import (
     FMVoice,
     GenesisChip,
 )
+from chiptune.chip.systems.nes import (
+    NES2A03,
+    NESDutyCycle,
+    NESNoiseVoice,
+    NESPulseVoice,
+    NESTriangleVoice,
+)
 from chiptune.chip.systems.sid import (
     SIDChip,
     SIDFilter,
@@ -72,6 +79,12 @@ __all__ = [
     "ChipPreset",
     "midi_to_frequency",
     "frequency_to_midi",
+    # NES
+    "NES2A03",
+    "NESPulseVoice",
+    "NESTriangleVoice",
+    "NESNoiseVoice",
+    "NESDutyCycle",
     # Game Boy
     "GameBoyChip",
     "GBPulseVoice",

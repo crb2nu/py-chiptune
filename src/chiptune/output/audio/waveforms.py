@@ -51,9 +51,7 @@ class PulseWaveGenerator(WaveformGenerator):
         DutyCycle.DUTY_75: 0.75,
     }
 
-    def __init__(
-        self, duty: DutyCycle = DutyCycle.DUTY_25, sample_rate: int = 44100
-    ) -> None:
+    def __init__(self, duty: DutyCycle = DutyCycle.DUTY_25, sample_rate: int = 44100) -> None:
         super().__init__(sample_rate)
         self.duty_ratio = self.DUTY_RATIOS[duty]
 

@@ -164,9 +164,7 @@ class ChipSystem(BaseModel, ABC):
             duration_sec = (note.duration * 60.0) / tempo
             amplitude = note.velocity / 127.0
 
-            note_samples = voice.generate_samples(
-                freq, duration_sec, amplitude, self.sample_rate
-            )
+            note_samples = voice.generate_samples(freq, duration_sec, amplitude, self.sample_rate)
             samples_list.append(note_samples)
 
         if not samples_list:

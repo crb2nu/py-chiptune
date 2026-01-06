@@ -1,17 +1,20 @@
 ![Banner](assets/banner.png)
 # flexinfer-chiptune
 
-A Python library for generating 8-bit/16-bit style MIDI music and sound effects with a semantic API that agents can use to programmatically compose music.
+A Python library for generating 8-bit/16-bit style music and sound effects with a semantic API that agents can use to programmatically compose music. Supports both MIDI export and direct audio synthesis with authentic retro chip waveforms.
 
 ## Features
 
 - **Music Theory Foundation**: Scales, chords, arpeggios with emotion-to-music mapping
 - **Game Theme Templates**: Pre-built patterns for battle, boss, victory, overworld, etc.
-- **NES Constraints**: Authentic 4-channel (2 pulse, triangle, noise) sound chip model
-- **Jingle Generator**: Quick musical phrases for game events
-- **Sound Effects**: Common game SFX (coin collect, jump, explosion, etc.)
-- **Agent-Friendly API**: Natural language context → music generation
-- **MIDI Export**: Standard MIDI files playable in any DAW
+- **Multiple Chip Systems**: NES 2A03, Game Boy DMG, C64 SID, and Sega Genesis FM
+- **Audio Effects**: Vibrato, tremolo, echo, chorus, tape delay, and effect chains
+- **Procedural Generation**: Markov-based melodies, auto bass lines, countermelodies
+- **Adaptive Intensity**: Dynamic music that responds to game state (0.0-1.0)
+- **Preset Library**: One-liner genre presets, effect chains, and quick composers
+- **CLI Tool**: Generate music from the command line
+- **Agent-Friendly API**: Natural language context to music generation
+- **Dual Export**: MIDI files or direct WAV synthesis
 
 ## Installation
 
@@ -25,28 +28,210 @@ Or with uv:
 uv add flexinfer-chiptune
 ```
 
+For audio playback support:
+
+```bash
+pip install flexinfer-chiptune[audio]
+```
+
 ## Quick Start
+
+### Command Line Interface
+
+```bash
+# Generate a battle theme
+chiptune generate --preset battle --output battle.wav
+
+# Generate with custom settings
+chiptune generate --preset overworld --root G --bpm 130 --bars 16 --effects space
+
+# Generate a sound effect
+chiptune sfx coin --output coin.mid
+
+# List all available presets
+chiptune list all
+```
+
+### Using Genre Presets
+
+```python
+from chiptune.presets import GenrePresets, QuickCompose
+
+# One-liner battle track with drums
+composer = QuickCompose.battle_track(length_bars=16)
+track = composer.build()
+
+# Pre-configured genre composers
+battle = GenrePresets.battle_theme()       # A minor, 165 BPM
+overworld = GenrePresets.overworld()       # C major, 120 BPM
+dungeon = GenrePresets.dungeon()           # E dorian, 85 BPM
+title = GenrePresets.title_screen()        # F major, 130 BPM
+chase = GenrePresets.chase_scene()         # E phrygian, 185 BPM
+```
 
 ### Using the Composer API
 
 ```python
-from chiptune import ChiptuneComposer
+from chiptune import ChiptuneComposer, AudioExporter
+from chiptune.presets import EffectPresets
 
 # Create a heroic battle theme
-composer = (
-    ChiptuneComposer.create(bpm=150, root="A", mode="minor")
-    .set_theme("battle")
-    .add_melody(contour="ascending", length_bars=8)
-    .add_bass(style="octave")
-    .add_arpeggio_layer()
-    .add_drums(pattern="driving")
-)
+composer = ChiptuneComposer.create(bpm=150, root="A", mode="minor")
+composer.set_progression(["i", "VII", "VI", "V"])
+composer.add_melody(length_bars=8, contour="ascending")
+composer.add_countermelody(motion="contrary")
+composer.add_bass(style="octave")
+composer.add_drums(pattern="driving")
 
-# Export to MIDI
-composer.export_midi("battle_theme.mid")
+# Build and export with effects
+track = composer.build()
+effects = EffectPresets.retro_gaming()
+
+exporter = AudioExporter()
+exporter.export_wav(track, "battle_theme.wav", effects=effects)
 ```
 
-### Using the Agent API
+### Audio Effects
+
+```python
+from chiptune.output.audio.effects import (
+    Tremolo, Vibrato, Echo, TapeDelay, Chorus, EffectChain
+)
+
+# Individual effects
+tremolo = Tremolo(rate=5.0, depth=0.3)
+echo = Echo(delay_time=0.25, feedback=0.5)
+chorus = Chorus.lush()
+
+# Chain effects together
+chain = EffectChain(effects=[
+    Tremolo.subtle(),
+    Chorus.classic(),
+    Echo.medium(),
+])
+
+# Or use the | operator
+chain = Tremolo() | Chorus.subtle() | Echo.short()
+
+# Apply to audio
+output = chain.process(samples, sample_rate=44100)
+```
+
+### Effect Presets
+
+```python
+from chiptune.presets import EffectPresets
+
+# Pre-built effect chains
+clean = EffectPresets.clean()           # No effects
+retro = EffectPresets.retro_gaming()    # Subtle chorus + echo
+space = EffectPresets.space_adventure() # Lush chorus + space delay
+lofi = EffectPresets.lo_fi_nostalgia()  # Tape delay + tremolo
+arcade = EffectPresets.arcade_cabinet() # Chorus + slapback
+dreamy = EffectPresets.dreamy()         # Heavy modulation effects
+dungeon = EffectPresets.dungeon_reverb() # Cavernous echo
+boss = EffectPresets.boss_battle()       # Punchy minimal effects
+```
+
+### Procedural Melody Generation
+
+```python
+from chiptune.generation import (
+    MarkovMelodyGenerator, MelodyStyle,
+    BassGenerator, CountermelodyGenerator,
+    IntensityProfile, IntensityController
+)
+
+# Generate melody from Markov chain
+gen = MarkovMelodyGenerator(order=2)
+gen.train_from_midi_pitches([60, 62, 64, 65, 67, 65, 64, 62, 60])
+notes = gen.generate(16, start_pitch=60)
+
+# Use style presets
+heroic = MelodyStyle.heroic()
+mysterious = MelodyStyle.mysterious()
+chiptune = MelodyStyle.chiptune()
+
+# Auto-generate bass lines
+bass_gen = BassGenerator.jazz()
+bass_notes = bass_gen.generate(chords, beats_per_chord=4)
+
+# Generate countermelody
+counter_gen = CountermelodyGenerator.contrary()
+counter = counter_gen.generate(melody, scale=scale)
+```
+
+### Adaptive Intensity
+
+```python
+from chiptune.generation import IntensityProfile, IntensityController
+
+# Intensity profiles for different game states
+calm = IntensityProfile.calm()           # Low, steady
+building = IntensityProfile.building()    # Gradually increasing
+battle = IntensityProfile.battle()        # High, volatile
+boss = IntensityProfile.boss_fight()      # Maximum intensity
+
+# Controller maps intensity to musical parameters
+controller = IntensityController.action()
+tempo = controller.get_tempo(progress=0.5)      # 80-160 BPM
+velocity = controller.get_velocity(progress=0.5) # 60-120
+layers = controller.get_active_layers(0.5, total_layers=4)
+```
+
+### Chip Systems
+
+```python
+from chiptune.chip.systems import NES2A03, GameBoyChip, SIDChip, GenesisChip
+
+# NES 2A03 (2 pulse + triangle + noise)
+nes = NES2A03.create()
+nes_fami = NES2A03.famitracker_style()
+
+# Game Boy DMG
+gameboy = GameBoyChip.create()
+
+# Commodore 64 SID
+sid = SIDChip.create()
+
+# Sega Genesis YM2612 (FM synthesis)
+genesis = GenesisChip.create()
+```
+
+### Sound Effects
+
+```python
+from chiptune import SFXGenerator
+
+sfx = SFXGenerator()
+
+# Generate common game sounds (returns MIDI bytes)
+coin = sfx.coin_collect()
+jump = sfx.jump()
+explosion = sfx.explosion()
+powerup = sfx.powerup()
+laser = sfx.laser()
+teleport = sfx.teleport()
+door_open = sfx.door_open()
+menu_select = sfx.menu_select()
+
+# Save to file
+sfx.save(coin, "coin.mid")
+```
+
+### Jingles
+
+```python
+from chiptune import Jingle
+
+# Quick musical phrases
+victory = Jingle.victory_fanfare(root="C", tempo=140)
+item = Jingle.item_get(root="G")
+level_up = Jingle.level_up()
+game_over = Jingle.game_over()
+```
+
+### Agent API
 
 ```python
 from chiptune import MusicAgent
@@ -64,37 +249,38 @@ music = agent.compose_for_context(
 sfx = agent.generate_sfx("coin_collect")
 ```
 
-### Using Jingles
+## CLI Reference
 
-```python
-from chiptune import Jingle
-
-# Create quick jingles
-victory = Jingle.victory_fanfare(root="C", tempo=140)
-item = Jingle.item_get(root="G")
-level_up = Jingle.level_up()
 ```
+chiptune generate [options]
+  --preset, -p    Genre preset: battle, overworld, dungeon, victory,
+                  title, shop, sad, chase (default: overworld)
+  --output, -o    Output file path (default: output.wav)
+  --bars, -b      Length in bars (default: 8)
+  --root, -r      Root note (C, D, E, F, G, A, B with optional #/b)
+  --bpm           Tempo in BPM (overrides preset default)
+  --effects, -e   Effect preset: clean, retro, space, lofi, arcade,
+                  dreamy, dungeon, boss (default: retro)
+  --format, -f    Output format: wav, midi (default: wav)
+  --no-drums      Exclude drums
+  --no-bass       Exclude bass
+  --no-counter    Exclude countermelody
+  --seed, -s      Random seed for reproducibility
 
-### Using Sound Effects
+chiptune sfx <type> [options]
+  type            Effect type: jump, land, coin, powerup, damage,
+                  explosion, laser, shield, teleport, menu_select,
+                  menu_confirm, menu_back, success, error,
+                  door_open, door_close, heartbeat, countdown
+  --output, -o    Output file path (default: sfx.mid)
 
-```python
-from chiptune import SFXGenerator
-
-sfx = SFXGenerator()
-
-# Generate common game sounds
-coin = sfx.coin_collect()
-jump = sfx.jump()
-explosion = sfx.explosion()
-powerup = sfx.powerup()
-
-# Save to file
-sfx.save(coin, "coin.mid")
+chiptune list [category]
+  category        What to list: presets, effects, sfx, all (default: all)
 ```
 
 ## Semantic Mappings
 
-### Emotions → Musical Elements
+### Emotions to Musical Elements
 
 | Emotion | Scale/Mode | Tempo | Character |
 |---------|------------|-------|-----------|
@@ -104,7 +290,7 @@ sfx.save(coin, "coin.mid")
 | Peaceful | Pentatonic | Slow | Flowing, 3rds/6ths |
 | Sad | Minor/Aeolian | Slow | Simple, minor 3rds |
 
-### Game Contexts → Themes
+### Game Contexts to Themes
 
 | Context | Characteristics |
 |---------|-----------------|
@@ -114,55 +300,7 @@ sfx.save(coin, "coin.mid")
 | Overworld | Adventurous, major, walking bass |
 | Dungeon | Modal, sparse, atmospheric |
 | Shop | Relaxed, major, simple rhythm |
-
-## API Reference
-
-### ChiptuneComposer
-
-Main entry point for composing music:
-
-- `create(bpm, root, mode)` - Create a new composer
-- `set_mood(mood)` - Configure for emotional character
-- `set_theme(theme)` - Configure for game context
-- `add_melody(contour, length_bars)` - Generate melody
-- `add_bass(style)` - Add bass line
-- `add_drums(pattern)` - Add percussion
-- `add_arpeggio_layer()` - Add harmony arpeggios
-- `export_midi(path)` - Export to MIDI file
-- `to_midi_bytes()` - Get MIDI as bytes
-
-### MusicAgent
-
-Semantic interface for AI agents:
-
-- `compose_for_context(context, duration, intensity)` - Generate from description
-- `generate_sfx(event)` - Generate sound effect
-- `compose_loop(mood, bars)` - Generate loopable segment
-
-### Jingle
-
-Quick musical phrases:
-
-- `victory_fanfare()` - Triumphant victory sound
-- `item_get()` - Item pickup jingle
-- `level_up()` - Level up fanfare
-- `coin_collect()` - Quick coin sound
-- `game_over()` - Sad game over jingle
-
-### SFXGenerator
-
-Game sound effects:
-
-- `coin_collect()` - Coin pickup
-- `jump()` - Jump sound
-- `land()` - Landing thud
-- `explosion()` - Explosion
-- `damage()` - Hurt/damage
-- `powerup()` - Power-up sound
-- `menu_select()` - Menu cursor
-- `menu_confirm()` - Menu confirmation
-- `laser()` - Projectile/laser
-- `teleport()` - Teleport sound
+| Chase | Very fast, phrygian, urgent |
 
 ## Development
 
@@ -177,8 +315,11 @@ uv sync
 # Run tests
 uv run pytest
 
-# Run the demo
-uv run python examples/demo.py
+# Type checking
+uv run mypy src/chiptune
+
+# Linting
+uv run ruff check src/chiptune
 ```
 
 ## License

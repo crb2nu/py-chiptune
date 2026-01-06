@@ -363,3 +363,114 @@ class TestChipComparison:
         min_len = min(len(gb_samples), len(sid_samples), len(genesis_samples))
         assert not np.allclose(gb_samples[:min_len], sid_samples[:min_len])
         assert not np.allclose(sid_samples[:min_len], genesis_samples[:min_len])
+
+
+class TestNES2A03:
+    """Tests for NES 2A03 APU chip system."""
+
+    def test_create(self) -> None:
+        """Should create NES chip with 4 voices."""
+        from chiptune.chip.systems import NES2A03
+
+        nes = NES2A03.create()
+
+        assert len(nes.voices) == 4
+        assert nes.chip_type.value == "nes"
+
+    def test_pulse_waveform(self) -> None:
+        """Pulse voice should generate pulse waves."""
+        from chiptune.chip.systems import NES2A03, NESDutyCycle
+
+        nes = NES2A03.create()
+        nes.pulse1.duty_cycle = NESDutyCycle.DUTY_50
+
+        samples = nes.pulse1.generate_samples(440.0, 0.01, 1.0, 44100)
+
+        assert len(samples) > 0
+        # Square wave should oscillate between +1 and -1
+        assert np.max(samples) > 0.9
+        assert np.min(samples) < -0.9
+
+    def test_triangle_no_volume(self) -> None:
+        """Triangle should always play at full volume."""
+        from chiptune.chip.systems import NES2A03
+
+        nes = NES2A03.create()
+
+        # Triangle has no volume control
+        assert nes.triangle.has_volume_control is False
+
+        samples = nes.triangle.generate_samples(220.0, 0.01, 0.5, 44100)
+        # Amplitude argument is ignored for triangle
+        assert len(samples) > 0
+
+    def test_noise_periods(self) -> None:
+        """Noise should use period-based frequencies."""
+        from chiptune.chip.systems import NES2A03
+
+        nes = NES2A03.create()
+
+        # Period 0 = highest pitch, period 15 = lowest
+        high = nes.noise.generate_samples(0.0, 0.01, 1.0, 44100)
+        low = nes.noise.generate_samples(15.0, 0.01, 1.0, 44100)
+
+        # Both should produce noise
+        assert len(high) > 0
+        assert len(low) > 0
+
+    def test_duty_cycles(self) -> None:
+        """Different duty cycles should produce different timbres."""
+        from chiptune.chip.systems import NES2A03, NESDutyCycle
+
+        nes = NES2A03.create()
+
+        samples_25 = []
+        for duty in [
+            NESDutyCycle.DUTY_12_5,
+            NESDutyCycle.DUTY_25,
+            NESDutyCycle.DUTY_50,
+        ]:
+            nes.pulse1.duty_cycle = duty
+            s = nes.pulse1.generate_samples(440.0, 0.01, 1.0, 44100)
+            samples_25.append(s)
+
+        # Different duty cycles should produce different waveforms
+        assert not np.allclose(samples_25[0], samples_25[1])
+        assert not np.allclose(samples_25[1], samples_25[2])
+
+    def test_render_stereo(self) -> None:
+        """Should render to stereo output."""
+        from chiptune.chip.systems import NES2A03
+
+        nes = NES2A03.create()
+        nes.pulse1.add_note(Note(pitch=60, duration=0.5, velocity=100))
+
+        result = nes.render(tempo=120.0)
+
+        assert result.shape[1] == 2
+        assert len(result) > 0
+
+    def test_presets(self) -> None:
+        """Should have preset constructors."""
+        from chiptune.chip.systems import NES2A03
+
+        classic = NES2A03.create()
+        famitracker = NES2A03.famitracker_style()
+
+        assert classic.name == "NES 2A03"
+        assert famitracker.name == "NES 2A03"
+
+    def test_included_in_comparison(self) -> None:
+        """NES should work alongside other chips."""
+        from chiptune.chip.systems import NES2A03, GameBoyChip, SIDChip
+
+        chips = [
+            NES2A03.create(),
+            GameBoyChip.create(),
+            SIDChip.create(),
+        ]
+
+        for chip in chips:
+            chip.voices[0].add_note(Note(pitch=60, duration=0.1, velocity=100))
+            result = chip.render(tempo=120.0)
+            assert result.shape[1] == 2

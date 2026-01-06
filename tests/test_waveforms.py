@@ -107,8 +107,9 @@ class TestNoiseGenerator:
         gen = NoiseGenerator()
 
         # Lower period = faster LFSR clocking = more variation
-        low_samples = gen.generate(period=0, duration=0.1)
-        high_samples = gen.generate(period=15, duration=0.1)
+        # (frequency parameter is used as NES noise period 0-15)
+        low_samples = gen.generate(frequency=0, duration=0.1)
+        high_samples = gen.generate(frequency=15, duration=0.1)
 
         # Measure average sample-to-sample change
         low_diff = np.mean(np.abs(np.diff(low_samples)))
@@ -122,8 +123,9 @@ class TestNoiseGenerator:
         gen = NoiseGenerator()
 
         # Should not raise errors
-        samples_neg = gen.generate(period=-5, duration=0.01)
-        samples_high = gen.generate(period=100, duration=0.01)
+        # (frequency parameter is used as NES noise period 0-15)
+        samples_neg = gen.generate(frequency=-5, duration=0.01)
+        samples_high = gen.generate(frequency=100, duration=0.01)
 
         assert len(samples_neg) > 0
         assert len(samples_high) > 0
@@ -133,8 +135,9 @@ class TestNoiseGenerator:
         gen_short = NoiseGenerator(mode="short")
         gen_long = NoiseGenerator(mode="long")
 
-        samples_short = gen_short.generate(period=5, duration=0.1)
-        samples_long = gen_long.generate(period=5, duration=0.1)
+        # frequency parameter is used as NES noise period 0-15
+        samples_short = gen_short.generate(frequency=5, duration=0.1)
+        samples_long = gen_long.generate(frequency=5, duration=0.1)
 
         # Both should produce valid output
         assert len(samples_short) == len(samples_long)
@@ -142,7 +145,8 @@ class TestNoiseGenerator:
     def test_bipolar_output(self) -> None:
         """Noise should be bipolar (-amplitude to +amplitude)."""
         gen = NoiseGenerator()
-        samples = gen.generate(period=5, duration=0.1, amplitude=1.0)
+        # frequency parameter is used as NES noise period 0-15
+        samples = gen.generate(frequency=5, duration=0.1, amplitude=1.0)
 
         # Should have both positive and negative values
         assert np.any(samples > 0)

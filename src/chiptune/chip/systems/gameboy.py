@@ -106,20 +106,14 @@ class GBPulseVoice(ChipVoice):
         num_samples = int(duration * sample_rate)
         samples = np.zeros(num_samples, dtype=np.float32)
 
-        sweep_samples = (
-            int(self.sweep_time * sample_rate) if self.sweep_time > 0 else num_samples
-        )
+        sweep_samples = int(self.sweep_time * sample_rate) if self.sweep_time > 0 else num_samples
         current_freq = frequency
         phase = 0.0
 
         for i in range(num_samples):
             # Update frequency at sweep intervals
             if sweep_samples > 0 and i > 0 and i % sweep_samples == 0:
-                delta = (
-                    current_freq / (1 << self.sweep_shift)
-                    if self.sweep_shift > 0
-                    else 0
-                )
+                delta = current_freq / (1 << self.sweep_shift) if self.sweep_shift > 0 else 0
                 current_freq = current_freq + delta * self.sweep_direction
                 current_freq = max(20.0, min(4000.0, current_freq))
 
@@ -417,13 +411,9 @@ class GameBoyChip(ChipSystem):
     description: str = "Nintendo Game Boy original sound chip"
 
     pulse1: GBPulseVoice = Field(
-        default_factory=lambda: GBPulseVoice(
-            voice_id=0, has_sweep=True, sweep_time=0.0078
-        )
+        default_factory=lambda: GBPulseVoice(voice_id=0, has_sweep=True, sweep_time=0.0078)
     )
-    pulse2: GBPulseVoice = Field(
-        default_factory=lambda: GBPulseVoice(voice_id=1, has_sweep=False)
-    )
+    pulse2: GBPulseVoice = Field(default_factory=lambda: GBPulseVoice(voice_id=1, has_sweep=False))
     wave: GBWaveVoice = Field(default_factory=lambda: GBWaveVoice(voice_id=2))
     noise: GBNoiseVoice = Field(default_factory=lambda: GBNoiseVoice(voice_id=3))
 
