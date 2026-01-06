@@ -9,9 +9,8 @@ from __future__ import annotations
 from io import BytesIO
 from typing import ClassVar
 
-from pydantic import BaseModel
-
 from midiutil import MIDIFile
+from pydantic import BaseModel
 
 from chiptune.chip.channels import ChannelType, NESChannels
 
@@ -69,7 +68,6 @@ class MidiExporter(BaseModel):
         Returns:
             MIDI file as bytes
         """
-        from chiptune.composer.composer import Track
 
         # Create MIDI file with 4 tracks (one per NES channel)
         midi = MIDIFile(4, deinterleave=False)
@@ -132,7 +130,6 @@ class MidiExporter(BaseModel):
         Returns:
             MIDI file as bytes
         """
-        from chiptune.patterns.jingles import Jingle
 
         # Create single-track MIDI
         midi = MIDIFile(1)
@@ -183,7 +180,6 @@ class MidiExporter(BaseModel):
         Returns:
             MIDI file as bytes
         """
-        from chiptune.theory.arpeggios import Note
 
         midi = MIDIFile(1)
         midi.addTempo(0, 0, tempo)

@@ -2,18 +2,18 @@
 
 from chiptune.chip.channels import (
     Channel,
+    ChannelAllocator,
     ChannelType,
     DutyCycle,
     NESChannels,
-    ChannelAllocator,
 )
 from chiptune.chip.effects import (
     ChipEffect,
-    EffectType,
-    Vibrato,
-    PitchSlide,
-    VolumeEnvelope,
     DutyCycleSweep,
+    EffectType,
+    PitchSlide,
+    Vibrato,
+    VolumeEnvelope,
 )
 
 __all__ = [

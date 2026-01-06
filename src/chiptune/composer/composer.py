@@ -12,20 +12,18 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
-from chiptune.theory.keys import Key, Mode
-from chiptune.theory.scales import Scale
-from chiptune.theory.chords import ChordProgression
-from chiptune.theory.arpeggios import Arpeggio, ArpeggioPattern, Note
-from chiptune.patterns.themes import GameTheme, ThemeTemplate, MelodicContour
-from chiptune.patterns.progressions import ProgressionBuilder, ProgressionMood
 from chiptune.chip.channels import (
-    NESChannels,
     ChannelAllocator,
-    Channel,
+    DrumPattern,
+    NESChannels,
     Part,
     PartRole,
-    DrumPattern,
 )
+from chiptune.patterns.themes import GameTheme, MelodicContour, ThemeTemplate
+from chiptune.theory.arpeggios import Arpeggio, ArpeggioPattern, Note
+from chiptune.theory.chords import ChordProgression
+from chiptune.theory.keys import Key, Mode
+from chiptune.theory.scales import Scale
 
 
 class BassStyle(str, Enum):
@@ -380,7 +378,6 @@ class ChiptuneComposer(BaseModel):
         octave: int,
     ) -> list[Note]:
         """Generate bass notes for a single chord."""
-        from chiptune.theory.chords import Chord
 
         root_pitch = chord.root_midi + (octave - 4) * 12
         notes: list[Note] = []

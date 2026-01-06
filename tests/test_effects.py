@@ -4,11 +4,11 @@ import numpy as np
 import pytest
 
 from chiptune.output.audio.effects import (
+    LFO,
     Chorus,
     EffectChain,
     EffectPresets,
     Ensemble,
-    LFO,
     LFOShape,
     MultiTapDelay,
     ParallelChain,

@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from chiptune import ChiptuneComposer
 from chiptune.chip.channels import Channel, DutyCycle, NESChannels

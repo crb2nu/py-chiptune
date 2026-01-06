@@ -10,8 +10,8 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
-from chiptune.theory.arpeggios import Note
 from chiptune.output.midi import MidiExporter
+from chiptune.theory.arpeggios import Note
 
 
 class SFXGenerator(BaseModel):

@@ -4,6 +4,8 @@ Provides NES-authentic waveform generation, ADSR envelopes,
 audio effects, and export to WAV/OGG formats.
 """
 
+# Effects - import subpackage
+from chiptune.output.audio import effects
 from chiptune.output.audio.envelope import ADSREnvelope
 from chiptune.output.audio.exporter import AudioExporter
 from chiptune.output.audio.mixer import ChannelMixer
@@ -14,9 +16,6 @@ from chiptune.output.audio.waveforms import (
     TriangleWaveGenerator,
     midi_to_frequency,
 )
-
-# Effects - import subpackage
-from chiptune.output.audio import effects
 
 __all__ = [
     "AudioExporter",

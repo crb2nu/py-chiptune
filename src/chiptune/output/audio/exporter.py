@@ -7,7 +7,7 @@ waveforms and envelopes. Supports effects processing.
 from __future__ import annotations
 
 from io import BytesIO
-from typing import TYPE_CHECKING, ClassVar, Optional, Union
+from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 from numpy.typing import NDArray
@@ -69,7 +69,7 @@ class AudioExporter(BaseModel):
         self,
         channel: Channel,
         bpm: int,
-        effects: Optional[Union["EffectChain", "SampleEffect"]] = None,
+        effects: EffectChain | SampleEffect | None = None,
     ) -> NDArray[np.float32]:
         """Render a single channel to audio samples.
 
@@ -153,7 +153,7 @@ class AudioExporter(BaseModel):
 
         # Apply effects if provided
         if effects is not None:
-            from chiptune.output.audio.effects import EffectChain, SampleEffect
+            from chiptune.output.audio.effects import SampleEffect
 
             if isinstance(effects, SampleEffect):
                 output = effects.process(output, self.sample_rate)
@@ -164,11 +164,9 @@ class AudioExporter(BaseModel):
 
     def render_track(
         self,
-        track: "Track",
-        effects: Optional[Union["EffectChain", "SampleEffect"]] = None,
-        channel_effects: Optional[
-            dict[int, Union["EffectChain", "SampleEffect"]]
-        ] = None,
+        track: Track,
+        effects: EffectChain | SampleEffect | None = None,
+        channel_effects: dict[int, EffectChain | SampleEffect] | None = None,
     ) -> NDArray[np.float32]:
         """Render a complete Track to stereo audio.
 
@@ -214,9 +212,9 @@ class AudioExporter(BaseModel):
 
     def export_wav(
         self,
-        track: "Track",
+        track: Track,
         path: str,
-        effects: Optional[Union["EffectChain", "SampleEffect"]] = None,
+        effects: EffectChain | SampleEffect | None = None,
     ) -> None:
         """Export Track to WAV file.
 
@@ -237,9 +235,9 @@ class AudioExporter(BaseModel):
 
     def export_ogg(
         self,
-        track: "Track",
+        track: Track,
         path: str,
-        effects: Optional[Union["EffectChain", "SampleEffect"]] = None,
+        effects: EffectChain | SampleEffect | None = None,
     ) -> None:
         """Export Track to OGG Vorbis file.
 
@@ -260,9 +258,9 @@ class AudioExporter(BaseModel):
 
     def export_bytes(
         self,
-        track: "Track",
+        track: Track,
         format: str = "wav",
-        effects: Optional[Union["EffectChain", "SampleEffect"]] = None,
+        effects: EffectChain | SampleEffect | None = None,
     ) -> bytes:
         """Export Track to audio bytes.
 

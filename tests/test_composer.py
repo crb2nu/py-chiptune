@@ -1,12 +1,11 @@
 """Tests for composer modules."""
 
-import pytest
 
-from chiptune.composer.composer import ChiptuneComposer, Track, BassStyle, DrumStyle
 from chiptune.composer.agent_api import MusicAgent
-from chiptune.patterns.themes import GameTheme, ThemeTemplate, MelodicContour
+from chiptune.composer.composer import BassStyle, ChiptuneComposer, DrumStyle, Track
 from chiptune.patterns.jingles import Jingle, JingleType
 from chiptune.patterns.progressions import ProgressionBuilder, ProgressionMood
+from chiptune.patterns.themes import GameTheme, MelodicContour, ThemeTemplate
 from chiptune.theory.keys import Mode
 
 

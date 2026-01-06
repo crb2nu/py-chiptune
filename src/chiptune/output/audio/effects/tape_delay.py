@@ -138,10 +138,6 @@ class TapeDelay(SampleEffect):
 
         output = np.zeros_like(samples)
 
-        # Calculate age-based high cut reduction
-        # Older tape = more treble loss per repeat
-        age_highcut = self.highcut * (1.0 - self.tape_age * 0.5)
-
         for i in range(len(samples)):
             # Read from delay line with modulation
             mod = wow_flutter[i] if len(wow_flutter) > i else 0.0
@@ -282,7 +278,7 @@ class MultiTapDelay(SampleEffect):
         # Ensure we have levels for all taps
         levels = self.tap_levels + [0.3] * (len(self.taps) - len(self.tap_levels))
 
-        for tap_time, level in zip(self.taps, levels):
+        for tap_time, level in zip(self.taps, levels, strict=False):
             delay_samples = int(tap_time * sample_rate)
             if delay_samples < len(samples):
                 # Simple delay (no modulation for multi-tap)

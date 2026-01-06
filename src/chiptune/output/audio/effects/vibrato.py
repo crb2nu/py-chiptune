@@ -3,7 +3,6 @@
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import Field
-from scipy import signal as scipy_signal
 
 from chiptune.output.audio.effects.base import PitchEffect, SampleEffect
 from chiptune.output.audio.effects.lfo import LFO, LFOShape

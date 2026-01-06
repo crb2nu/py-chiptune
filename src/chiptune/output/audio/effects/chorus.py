@@ -252,7 +252,7 @@ class Ensemble(SampleEffect):
         output = np.zeros_like(samples)
         rng = np.random.default_rng(42)
 
-        for voice in range(self.size):
+        for _voice in range(self.size):
             # Random but consistent detuning per voice
             voice_detune = rng.uniform(-self.detune, self.detune)
             ratio = 2.0 ** (voice_detune / 1200.0)

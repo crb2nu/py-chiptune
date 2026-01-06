@@ -7,9 +7,8 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
+from chiptune.theory.arpeggios import Note
 from chiptune.theory.keys import Key, Mode
-from chiptune.theory.arpeggios import Note, Arpeggio, ArpeggioPattern
-from chiptune.theory.chords import Chord, ChordQuality
 
 
 class JingleType(str, Enum):
@@ -181,7 +180,9 @@ class Jingle(BaseModel):
         scale = Scale.from_key(key)
         notes = []
 
-        for degree, duration, velocity in zip(degrees, durations, velocities):
+        for degree, duration, velocity in zip(
+            degrees, durations, velocities, strict=False
+        ):
             pitch = scale.degree_to_pitch(degree, octave=octave)
             notes.append(
                 Note(

@@ -95,7 +95,7 @@ class ParallelChain(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    chains: list[Union[SampleEffect, EffectChain]] = Field(default_factory=list)
+    chains: list[SampleEffect | EffectChain] = Field(default_factory=list)
     levels: list[float] = Field(default_factory=list)
     dry_level: float = Field(default=0.0, ge=0.0, le=1.0)
 
@@ -124,7 +124,7 @@ class ParallelChain(BaseModel):
         result = samples * (self.dry_level / total_level)
 
         # Add each chain's output
-        for chain, level in zip(self.chains, levels):
+        for chain, level in zip(self.chains, levels, strict=False):
             if isinstance(chain, EffectChain):
                 processed = chain.process(samples, sample_rate)
             else:
@@ -197,7 +197,7 @@ class EffectPresets:
     @staticmethod
     def dreamy() -> EffectChain:
         """Dreamy, ethereal effect chain."""
-        from chiptune.output.audio.effects.chorus import Chorus, Ensemble
+        from chiptune.output.audio.effects.chorus import Ensemble
         from chiptune.output.audio.effects.tape_delay import TapeDelay
         from chiptune.output.audio.effects.tremolo import Tremolo
 

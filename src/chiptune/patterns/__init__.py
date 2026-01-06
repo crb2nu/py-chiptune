@@ -1,12 +1,12 @@
 """Game music patterns and templates."""
 
-from chiptune.patterns.themes import GameTheme, ThemeTemplate, MelodicContour
-from chiptune.patterns.jingles import Jingle, JingleType, JingleSequence
+from chiptune.patterns.jingles import Jingle, JingleSequence, JingleType
 from chiptune.patterns.progressions import (
     ProgressionBuilder,
     ProgressionMood,
     ProgressionVariation,
 )
+from chiptune.patterns.themes import GameTheme, MelodicContour, ThemeTemplate
 
 __all__ = [
     "GameTheme",

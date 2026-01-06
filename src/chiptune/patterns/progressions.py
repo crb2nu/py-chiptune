@@ -7,8 +7,8 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
+from chiptune.theory.chords import Chord, ChordProgression
 from chiptune.theory.keys import Key, Mode
-from chiptune.theory.chords import Chord, ChordProgression, ChordQuality
 
 
 class ProgressionMood(str, Enum):

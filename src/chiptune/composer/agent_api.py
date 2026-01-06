@@ -6,15 +6,14 @@ for music generation without requiring music theory knowledge.
 
 from __future__ import annotations
 
-import re
 from typing import ClassVar
 
 from pydantic import BaseModel
 
-from chiptune.composer.composer import ChiptuneComposer, BassStyle, DrumStyle
-from chiptune.patterns.themes import GameTheme, MelodicContour
+from chiptune.composer.composer import BassStyle, ChiptuneComposer, DrumStyle
 from chiptune.patterns.jingles import Jingle, JingleType
-from chiptune.theory.keys import Key, Mode
+from chiptune.patterns.themes import GameTheme, MelodicContour
+from chiptune.theory.keys import Mode
 
 
 class MusicAgent(BaseModel):

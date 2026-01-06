@@ -7,7 +7,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
-from chiptune.theory.keys import Key, Mode, NOTE_TO_MIDI, MIDI_TO_NOTE
+from chiptune.theory.keys import MIDI_TO_NOTE, NOTE_TO_MIDI, Key, Mode
 
 
 class ChordQuality(str, Enum):

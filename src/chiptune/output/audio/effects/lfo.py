@@ -1,7 +1,6 @@
 """Low Frequency Oscillator for modulation effects."""
 
 from enum import Enum
-from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray

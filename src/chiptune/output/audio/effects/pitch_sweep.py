@@ -283,12 +283,11 @@ class PitchBend(PitchEffect):
                 # Return phase
                 t = (i - bend_samples - hold_samples) / return_samples
                 semitones = self.bend_semitones * (1 - t)
+            # After return or no return
+            elif self.return_time > 0:
+                semitones = 0.0
             else:
-                # After return or no return
-                if self.return_time > 0:
-                    semitones = 0.0
-                else:
-                    semitones = self.bend_semitones
+                semitones = self.bend_semitones
 
             frequencies[i] = base_frequency * (2.0 ** (semitones / 12.0))
 

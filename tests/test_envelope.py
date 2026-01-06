@@ -1,7 +1,6 @@
 """Tests for ADSR envelopes."""
 
 import numpy as np
-import pytest
 
 from chiptune.output.audio.envelope import ADSREnvelope
 

@@ -1,11 +1,10 @@
 """Tests for music theory modules."""
 
-import pytest
 
-from chiptune.theory.keys import Key, Mode, NOTE_TO_MIDI
-from chiptune.theory.scales import Scale, ScaleType
-from chiptune.theory.chords import Chord, ChordProgression, ChordQuality
 from chiptune.theory.arpeggios import Arpeggio, ArpeggioPattern, Note
+from chiptune.theory.chords import Chord, ChordProgression, ChordQuality
+from chiptune.theory.keys import Key, Mode
+from chiptune.theory.scales import Scale, ScaleType
 
 
 class TestKey:

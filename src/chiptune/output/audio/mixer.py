@@ -76,11 +76,12 @@ class ChannelMixer(BaseModel):
             right_gain = np.sqrt(0.5 * (1 + pan)) * volume
 
             # Pad samples if needed
+            padded = samples
             if len(samples) < max_length:
-                samples = np.pad(samples, (0, max_length - len(samples)))
+                padded = np.pad(samples, (0, max_length - len(samples)))
 
-            left += samples * left_gain
-            right += samples * right_gain
+            left += padded * left_gain
+            right += padded * right_gain
 
         # Apply master volume and soft clip to prevent harsh distortion
         stereo = np.column_stack([left, right]) * self.master_volume

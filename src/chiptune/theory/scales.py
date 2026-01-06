@@ -7,7 +7,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
-from chiptune.theory.keys import Key, Mode, MODE_INTERVALS, NOTE_TO_MIDI
+from chiptune.theory.keys import NOTE_TO_MIDI, Key, Mode
 
 
 class ScaleType(str, Enum):
