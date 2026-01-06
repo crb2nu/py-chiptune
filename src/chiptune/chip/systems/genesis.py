@@ -216,7 +216,7 @@ class FMVoice(ChipVoice):
         env3: NDArray[np.float32],
         env4: NDArray[np.float32],
         feedback: float,
-    ) -> NDArray[np.float64]:
+    ) -> NDArray[np.floating]:
         """Apply FM algorithm to generate output."""
         # Simplified FM: modulation index based on envelope
         mod_index = 4.0  # Base modulation index
@@ -335,9 +335,11 @@ class GenesisChip(ChipSystem):
 
         for i, voice in enumerate(self.voices):
             if voice.notes:
-                # Apply global LFO settings
-                voice.lfo_enable = self.lfo_enable
-                voice.lfo_frequency = self.lfo_frequency
+                # Apply global LFO settings (voices are FMVoice instances)
+                fm_voice = voice if isinstance(voice, FMVoice) else None
+                if fm_voice:
+                    fm_voice.lfo_enable = self.lfo_enable
+                    fm_voice.lfo_frequency = self.lfo_frequency
 
                 samples = self.render_voice(voice.voice_id, tempo)
                 channel_samples[i] = samples

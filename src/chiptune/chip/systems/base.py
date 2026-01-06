@@ -181,7 +181,7 @@ class ChipPreset(BaseModel):
     name: str
     chip_type: ChipType
     description: str = ""
-    parameters: dict = Field(default_factory=dict)
+    parameters: dict[str, object] = Field(default_factory=dict)
 
 
 def midi_to_frequency(midi_note: int) -> float:

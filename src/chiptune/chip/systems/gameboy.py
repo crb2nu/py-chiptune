@@ -340,9 +340,9 @@ class GBWaveVoice(ChipVoice):
         phase = (t * frequency * 32) % 32
         indices = phase.astype(int) % 32
 
-        samples = wt[indices] * amplitude
+        samples: NDArray[np.float32] = (wt[indices] * amplitude).astype(np.float32)
 
-        return samples.astype(np.float32)
+        return samples
 
 
 class GBNoiseVoice(ChipVoice):
