@@ -48,8 +48,7 @@ class AudioPlayer(BaseModel):
             import sounddevice as sd
         except ImportError as e:
             raise ImportError(
-                "sounddevice not installed. Install with: "
-                "pip install py-chiptune[audio]"
+                "sounddevice not installed. Install with: pip install py-chiptune[audio]"
             ) from e
 
         sd.play(samples, self.sample_rate)

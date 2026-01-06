@@ -274,9 +274,7 @@ class ChiptuneComposer(BaseModel):
 
                 # Calculate pitch based on contour
                 progress = current_beat / total_beats
-                pitch_index = self._contour_to_index(
-                    contour, progress, len(scale_pitches)
-                )
+                pitch_index = self._contour_to_index(contour, progress, len(scale_pitches))
 
                 pitch = scale_pitches[pitch_index]
                 velocity = random.randint(80, 110)
@@ -286,9 +284,7 @@ class ChiptuneComposer(BaseModel):
 
         return notes
 
-    def _contour_to_index(
-        self, contour: MelodicContour, progress: float, max_index: int
-    ) -> int:
+    def _contour_to_index(self, contour: MelodicContour, progress: float, max_index: int) -> int:
         """Convert contour and progress to scale index."""
         import math
 
@@ -357,9 +353,7 @@ class ChiptuneComposer(BaseModel):
         notes: list[Note] = []
 
         for chord in chords:
-            bass_notes = self._generate_bass_for_chord(
-                chord, style, beats_per_chord, octave=3
-            )
+            bass_notes = self._generate_bass_for_chord(chord, style, beats_per_chord, octave=3)
             notes.extend(bass_notes)
 
         self.parts.append(Part(role=PartRole.BASS, notes=notes, priority=8))
@@ -399,9 +393,7 @@ class ChiptuneComposer(BaseModel):
                 note_duration = beats / len(pitches)
                 for i, pitch in enumerate(pitches):
                     vel = 100 if i == 0 else 85
-                    notes.append(
-                        Note(pitch=pitch, duration=note_duration, velocity=vel)
-                    )
+                    notes.append(Note(pitch=pitch, duration=note_duration, velocity=vel))
 
             case BassStyle.ARPEGGIATED:
                 # Quick arpeggio on bass

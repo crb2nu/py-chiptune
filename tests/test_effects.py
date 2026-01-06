@@ -303,9 +303,7 @@ class TestPitchBend:
 
     def test_returns_to_base(self) -> None:
         """Bend with return should come back to base pitch."""
-        bend = PitchBend(
-            bend_semitones=2.0, bend_time=0.05, hold_time=0.05, return_time=0.1
-        )
+        bend = PitchBend(bend_semitones=2.0, bend_time=0.05, hold_time=0.05, return_time=0.1)
         t = np.linspace(0, 0.5, 22050, dtype=np.float32)
 
         freqs = bend.modulate_frequency(440.0, t, sample_rate=44100)

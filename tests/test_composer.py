@@ -1,6 +1,5 @@
 """Tests for composer modules."""
 
-
 from chiptune.composer.agent_api import MusicAgent
 from chiptune.composer.composer import BassStyle, ChiptuneComposer, DrumStyle, Track
 from chiptune.patterns.jingles import Jingle, JingleType

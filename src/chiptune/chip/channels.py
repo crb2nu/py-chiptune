@@ -251,9 +251,7 @@ class ChannelAllocator(BaseModel):
         assigned_priorities: dict[int, int] = {}
 
         for part in sorted_parts:
-            target_channel = self.DEFAULT_ALLOCATION.get(
-                part.role, NESChannels.PULSE1_ID
-            )
+            target_channel = self.DEFAULT_ALLOCATION.get(part.role, NESChannels.PULSE1_ID)
 
             # Check if we need to bump a lower-priority part
             current_priority = assigned_priorities.get(target_channel, -1)

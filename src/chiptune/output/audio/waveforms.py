@@ -51,9 +51,7 @@ class PulseWaveGenerator(WaveformGenerator):
         DutyCycle.DUTY_75: 0.75,
     }
 
-    def __init__(
-        self, duty: DutyCycle = DutyCycle.DUTY_25, sample_rate: int = 44100
-    ) -> None:
+    def __init__(self, duty: DutyCycle = DutyCycle.DUTY_25, sample_rate: int = 44100) -> None:
         super().__init__(sample_rate)
         self.duty_ratio = self.DUTY_RATIOS[duty]
 
@@ -183,9 +181,7 @@ class NoiseGenerator(WaveformGenerator):
         # Feedback tap position: bit 6 for short mode, bit 1 for long mode
         self.feedback_bit = 6 if mode == "short" else 1
 
-    def generate(
-        self, period: int, duration: float, amplitude: float = 1.0
-    ) -> NDArray[np.float32]:
+    def generate(self, period: int, duration: float, amplitude: float = 1.0) -> NDArray[np.float32]:
         """Generate NES-style noise.
 
         Args:

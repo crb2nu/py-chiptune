@@ -1,6 +1,5 @@
 """Tests for music theory modules."""
 
-
 from chiptune.theory.arpeggios import Arpeggio, ArpeggioPattern, Note
 from chiptune.theory.chords import Chord, ChordProgression, ChordQuality
 from chiptune.theory.keys import Key, Mode

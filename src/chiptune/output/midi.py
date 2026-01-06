@@ -53,9 +53,7 @@ class MidiExporter(BaseModel):
     def _get_instrument(self, channel_type: ChannelType) -> int:
         """Get MIDI program number for channel type."""
         instruments = (
-            self.AUTHENTIC_INSTRUMENTS
-            if self.use_authentic_instruments
-            else self.INSTRUMENT_MAP
+            self.AUTHENTIC_INSTRUMENTS if self.use_authentic_instruments else self.INSTRUMENT_MAP
         )
         return instruments.get(channel_type, 80)
 

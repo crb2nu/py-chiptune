@@ -162,8 +162,7 @@ class Portamento(PitchEffect):
                 if i < glide_samples:
                     t = i / glide_samples
                     frequencies[i] = (
-                        self.start_frequency
-                        + (base_frequency - self.start_frequency) * t
+                        self.start_frequency + (base_frequency - self.start_frequency) * t
                     )
                 else:
                     frequencies[i] = base_frequency
@@ -276,10 +275,7 @@ class PitchBend(PitchEffect):
             elif i < bend_samples + hold_samples:
                 # Hold phase
                 semitones = self.bend_semitones
-            elif (
-                self.return_time > 0
-                and i < bend_samples + hold_samples + return_samples
-            ):
+            elif self.return_time > 0 and i < bend_samples + hold_samples + return_samples:
                 # Return phase
                 t = (i - bend_samples - hold_samples) / return_samples
                 semitones = self.bend_semitones * (1 - t)

@@ -226,9 +226,7 @@ class AudioExporter(BaseModel):
         try:
             import soundfile as sf
         except ImportError as e:
-            raise ImportError(
-                "soundfile not installed. Install with: pip install soundfile"
-            ) from e
+            raise ImportError("soundfile not installed. Install with: pip install soundfile") from e
 
         stereo = self.render_track(track, effects=effects)
         sf.write(path, stereo, self.sample_rate, subtype="PCM_16")
@@ -249,9 +247,7 @@ class AudioExporter(BaseModel):
         try:
             import soundfile as sf
         except ImportError as e:
-            raise ImportError(
-                "soundfile not installed. Install with: pip install soundfile"
-            ) from e
+            raise ImportError("soundfile not installed. Install with: pip install soundfile") from e
 
         stereo = self.render_track(track, effects=effects)
         sf.write(path, stereo, self.sample_rate, format="OGG", subtype="VORBIS")
@@ -275,9 +271,7 @@ class AudioExporter(BaseModel):
         try:
             import soundfile as sf
         except ImportError as e:
-            raise ImportError(
-                "soundfile not installed. Install with: pip install soundfile"
-            ) from e
+            raise ImportError("soundfile not installed. Install with: pip install soundfile") from e
 
         stereo = self.render_track(track, effects=effects)
         buffer = BytesIO()
@@ -318,9 +312,7 @@ class AudioExporter(BaseModel):
         try:
             import soundfile as sf
         except ImportError as e:
-            raise ImportError(
-                "soundfile not installed. Install with: pip install soundfile"
-            ) from e
+            raise ImportError("soundfile not installed. Install with: pip install soundfile") from e
 
         buffer = BytesIO()
         sf.write(buffer, stereo, self.sample_rate, format="WAV", subtype="PCM_16")

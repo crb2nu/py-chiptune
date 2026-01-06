@@ -181,9 +181,7 @@ class MarkovMelodyGenerator(BaseModel):
         for note in raw_notes:
             # Find closest scale pitch
             closest = min(scale_pitches, key=lambda p: abs(p - note.pitch))
-            result.append(
-                Note(pitch=closest, duration=note.duration, velocity=note.velocity)
-            )
+            result.append(Note(pitch=closest, duration=note.duration, velocity=note.velocity))
 
         return result
 

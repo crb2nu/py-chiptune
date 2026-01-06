@@ -128,10 +128,7 @@ class Arpeggio(BaseModel):
             List of Note objects
         """
         sequence = self._generate_sequence()
-        return [
-            Note(pitch=p, duration=self.note_duration, velocity=velocity)
-            for p in sequence
-        ]
+        return [Note(pitch=p, duration=self.note_duration, velocity=velocity) for p in sequence]
 
     def repeat(self, times: int) -> list[Note]:
         """Generate repeated arpeggio cycles.

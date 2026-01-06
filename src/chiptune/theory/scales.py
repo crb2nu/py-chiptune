@@ -161,9 +161,7 @@ class Scale(BaseModel):
 
         return pitch  # Fallback
 
-    def random_pitch(
-        self, low: int = 60, high: int = 84, prefer_chord_tones: bool = True
-    ) -> int:
+    def random_pitch(self, low: int = 60, high: int = 84, prefer_chord_tones: bool = True) -> int:
         """Get a random pitch from the scale within a range.
 
         Args:
@@ -176,9 +174,7 @@ class Scale(BaseModel):
         """
         import random
 
-        pitches = [
-            p for p in self.get_pitches(octave=3, num_octaves=4) if low <= p <= high
-        ]
+        pitches = [p for p in self.get_pitches(octave=3, num_octaves=4) if low <= p <= high]
 
         if not pitches:
             return low

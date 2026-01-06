@@ -42,9 +42,7 @@ class ChannelMixer(BaseModel):
         NESChannels.NOISE_ID: 0.0,  # Center (drums)
     }
 
-    def mix(
-        self, channel_samples: dict[int, NDArray[np.float32]]
-    ) -> NDArray[np.float32]:
+    def mix(self, channel_samples: dict[int, NDArray[np.float32]]) -> NDArray[np.float32]:
         """Mix channel sample arrays into stereo output.
 
         Args:
@@ -89,9 +87,7 @@ class ChannelMixer(BaseModel):
 
         return stereo.astype(np.float32)
 
-    def mix_mono(
-        self, channel_samples: dict[int, NDArray[np.float32]]
-    ) -> NDArray[np.float32]:
+    def mix_mono(self, channel_samples: dict[int, NDArray[np.float32]]) -> NDArray[np.float32]:
         """Mix channel sample arrays into mono output.
 
         Args:

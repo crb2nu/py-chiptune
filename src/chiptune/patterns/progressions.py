@@ -147,24 +147,16 @@ class ProgressionBuilder(BaseModel):
         """
         new_numerals = self.numerals + [numeral]
         new_beats = self.beats_per_chord + [beats]
-        return self.model_copy(
-            update={"numerals": new_numerals, "beats_per_chord": new_beats}
-        )
+        return self.model_copy(update={"numerals": new_numerals, "beats_per_chord": new_beats})
 
     def add_tonic(self, beats: int = 4) -> ProgressionBuilder:
         """Add tonic chord (I or i)."""
-        numeral = (
-            "i" if self.key.mode in (Mode.AEOLIAN, Mode.DORIAN, Mode.PHRYGIAN) else "I"
-        )
+        numeral = "i" if self.key.mode in (Mode.AEOLIAN, Mode.DORIAN, Mode.PHRYGIAN) else "I"
         return self.add(numeral, beats)
 
     def add_subdominant(self, beats: int = 4) -> ProgressionBuilder:
         """Add subdominant chord (IV or iv)."""
-        numeral = (
-            "iv"
-            if self.key.mode in (Mode.AEOLIAN, Mode.DORIAN, Mode.PHRYGIAN)
-            else "IV"
-        )
+        numeral = "iv" if self.key.mode in (Mode.AEOLIAN, Mode.DORIAN, Mode.PHRYGIAN) else "IV"
         return self.add(numeral, beats)
 
     def add_dominant(self, beats: int = 4) -> ProgressionBuilder:
@@ -285,6 +277,4 @@ class ProgressionVariation(BaseModel):
             new_numerals.insert(position + 1, passing)
             new_beats.insert(position + 1, original_beats - original_beats // 2)
 
-        return self.base.model_copy(
-            update={"numerals": new_numerals, "beats_per_chord": new_beats}
-        )
+        return self.base.model_copy(update={"numerals": new_numerals, "beats_per_chord": new_beats})

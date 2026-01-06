@@ -106,9 +106,7 @@ class ADSREnvelope(BaseModel):
         release_samples = int(self.release_time * sample_rate)
 
         # Sustain fills the remainder
-        sustain_samples = max(
-            0, total_samples - attack_samples - decay_samples - release_samples
-        )
+        sustain_samples = max(0, total_samples - attack_samples - decay_samples - release_samples)
 
         current_sample = 0
 
@@ -140,9 +138,7 @@ class ADSREnvelope(BaseModel):
             count = end - current_sample
             if count > 0:
                 start_level = (
-                    envelope[current_sample - 1]
-                    if current_sample > 0
-                    else self.sustain_level
+                    envelope[current_sample - 1] if current_sample > 0 else self.sustain_level
                 )
                 envelope[current_sample:end] = np.linspace(start_level, 0, count)
 
