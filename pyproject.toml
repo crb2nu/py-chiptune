@@ -7,7 +7,7 @@ name = "flexinfer-chiptune"
 version = "0.5.3"
 description = "Algorithmic chiptune music composition library for games and AI agents"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 license = { text = "MIT" }
 authors = [
     { name = "Cody Blevins", email = "cody@flexinfer.ai" }
