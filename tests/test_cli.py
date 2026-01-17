@@ -41,6 +41,17 @@ class TestCLI:
         assert payload["schema"] == 1
         assert any(item["name"] == "toon" for item in payload["presets"])
 
+    def test_list_toon_all(self, capsys) -> None:
+        from chiptune.cli import main
+
+        exit_code = main(["list", "--toon"])
+        assert exit_code == 0
+
+        stdout = capsys.readouterr().out
+        assert "program: chiptune" in stdout
+        assert "schema: 1" in stdout
+        assert "presets[" in stdout
+
     def test_list_json_presets_only(self, capsys) -> None:
         from chiptune.cli import main
 
@@ -161,6 +172,16 @@ class TestCLI:
         assert payload["command"] == "sfx"
         assert payload["saved"] is False
 
+    def test_sfx_toon_no_save(self, capsys) -> None:
+        from chiptune.cli import main
+
+        exit_code = main(["sfx", "coin", "--toon", "--format", "midi", "--no-save"])
+        assert exit_code == 0
+
+        stdout = capsys.readouterr().out
+        assert "command: sfx" in stdout
+        assert "type: coin" in stdout
+
     def test_schema_generate(self, capsys) -> None:
         from chiptune.cli import main
 
@@ -197,6 +218,17 @@ class TestCLI:
         payload = tomllib.loads(stdout)
         assert len(payload["runs"]) == 2
         assert payload["runs"][0]["command"] == "generate"
+
+    def test_generate_toon_batch(self, capsys) -> None:
+        from chiptune.cli import main
+
+        exit_code = main(["generate", "--count", "2", "--toon", "--format", "midi", "--no-save"])
+        assert exit_code == 0
+
+        stdout = capsys.readouterr().out.strip()
+        lines = stdout.splitlines()
+        assert lines
+        assert lines[0].startswith("items[2]{") or lines[0].startswith("items[2]:")
 
     def test_generate_plan_batch_outputs(self, tmp_path, capsys) -> None:
         from chiptune.cli import main

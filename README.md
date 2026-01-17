@@ -56,6 +56,7 @@ chiptune generate --preset battle --format midi --no-save --metadata battle.json
 chiptune generate --preset toon --count 5 --format midi --no-save --jsonl
 chiptune generate --preset toon --plan --count 3 --format midi --output out.mid
 chiptune generate --preset toon --count 2 --format midi --no-save --toml
+chiptune generate --preset toon --count 2 --format midi --no-save --toon
 
 # Generate a sound effect
 chiptune sfx coin --output coin.mid
@@ -72,11 +73,13 @@ chiptune list all
 # Machine-readable inventory (for agents)
 chiptune list --json
 chiptune list --toml
+chiptune list --toon
 
 # JSON Schema for `--json` payloads
 chiptune schema
 chiptune schema generate
 chiptune schema generate --toml
+chiptune schema generate --toon
 ```
 
 ### Shell completion

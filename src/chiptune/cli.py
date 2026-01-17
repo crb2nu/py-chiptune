@@ -260,6 +260,235 @@ def _toml_dump(root: object, *, array_key: str = "items") -> str:
     return "\n".join(lines) + ("\n" if lines else "")
 
 
+def _toon_canonicalize_number(text: str) -> str:
+    if text in {"-0", "-0.0"}:
+        return "0"
+    return text
+
+
+_toon_numeric_re = re.compile(r"^[+-]?(?:\d+|\d*\.\d+)(?:[eE][+-]?\d+)?$")
+
+
+def _toon_needs_quotes(text: str, *, delimiter: str) -> bool:
+    lower = text.lower()
+    if lower in {"true", "false", "null"}:
+        return True
+    if _toon_numeric_re.fullmatch(text):
+        return True
+
+    for ch in text:
+        code = ord(ch)
+        if code < 0x20 or code == 0x7F:
+            return True
+        if ch in {"\n", "\r", "\t"}:
+            return True
+        if ch in {" ", '"', "\\", ":", "{", "}", "[", "]", delimiter}:
+            return True
+
+    return False
+
+
+def _toon_quote(text: str) -> str:
+    out: list[str] = ['"']
+    for ch in text:
+        code = ord(ch)
+        if ch == "\\":
+            out.append("\\\\")
+        elif ch == '"':
+            out.append('\\"')
+        elif ch == "\n":
+            out.append("\\n")
+        elif ch == "\r":
+            out.append("\\r")
+        elif ch == "\t":
+            out.append("\\t")
+        elif ch == "\b":
+            out.append("\\b")
+        elif ch == "\f":
+            out.append("\\f")
+        elif code < 0x20 or code == 0x7F:
+            out.append(f"\\u{code:04x}")
+        else:
+            out.append(ch)
+    out.append('"')
+    return "".join(out)
+
+
+def _toon_string_token(text: str, *, delimiter: str) -> str:
+    if text == "":
+        return '""'
+    if _toon_needs_quotes(text, delimiter=delimiter):
+        return _toon_quote(text)
+    return text
+
+
+def _toon_key_token(key: str) -> str:
+    return _toon_string_token(key, delimiter=",")
+
+
+def _toon_primitive_token(value: object) -> str | None:
+    import math
+
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            return "null"
+        return _toon_canonicalize_number(repr(value))
+    if isinstance(value, str):
+        return _toon_string_token(value, delimiter=",")
+    return None
+
+
+def _toon_tabularize_strict(
+    items: list[object],
+) -> tuple[list[str], list[list[str]]] | None:
+    if not items or not isinstance(items[0], dict) or not items[0]:
+        return None
+
+    first = items[0]
+    header_keys = list(first.keys())
+    rows: list[list[str]] = []
+
+    for item in items:
+        if not isinstance(item, dict) or list(item.keys()) != header_keys:
+            return None
+        row: list[str] = []
+        for key in header_keys:
+            token = _toon_primitive_token(item.get(key))
+            if token is None:
+                return None
+            row.append(token)
+        rows.append(row)
+
+    return header_keys, rows
+
+
+def _toon_tabularize_primitive_subset(
+    items: list[object],
+) -> tuple[list[str], list[list[str]]] | None:
+    if not items or not isinstance(items[0], dict) or not items[0]:
+        return None
+
+    first = items[0]
+    candidates = list(first.keys())
+    header_keys: list[str] = []
+    for key in candidates:
+        ok = True
+        for item in items:
+            if not isinstance(item, dict) or key not in item:
+                ok = False
+                break
+            if _toon_primitive_token(item.get(key)) is None:
+                ok = False
+                break
+        if ok:
+            header_keys.append(key)
+
+    if not header_keys:
+        return None
+
+    rows: list[list[str]] = []
+    for item in items:
+        row = []
+        for key in header_keys:
+            row.append(_toon_primitive_token(item.get(key)) or "null")
+        rows.append(row)
+
+    return header_keys, rows
+
+
+def _toon_encode_array(
+    lines: list[str], indent: int, key: str, items: list[object], *, anonymous: bool
+) -> None:
+    indent_str = "  " * indent
+    name = _toon_key_token(key)
+    if anonymous:
+        name = "items"
+
+    tab = _toon_tabularize_primitive_subset(items) or _toon_tabularize_strict(items)
+    if tab is not None:
+        header_keys, rows = tab
+        lines.append(f"{indent_str}{name}[{len(items)}]{{{','.join(header_keys)}}}:")
+        row_indent = "  " * (indent + 1)
+        for row in rows:
+            lines.append(row_indent + ",".join(row))
+        return
+
+    encoded_prim: list[str] = []
+    all_prim = True
+    for item in items:
+        tok = _toon_primitive_token(item)
+        if tok is None:
+            all_prim = False
+            break
+        encoded_prim.append(tok)
+    if all_prim:
+        lines.append(f"{indent_str}{name}[{len(items)}]: {','.join(encoded_prim)}")
+        return
+
+    lines.append(f"{indent_str}{name}[{len(items)}]:")
+    item_indent = "  " * (indent + 1)
+    for item in items:
+        if isinstance(item, dict):
+            lines.append(item_indent + "-")
+            _toon_encode_object(lines, indent + 2, item)
+        elif isinstance(item, list):
+            lines.append(item_indent + "-")
+            _toon_encode_array(lines, indent + 2, "items", item, anonymous=True)
+        else:
+            tok = _toon_primitive_token(item)
+            if tok is None:
+                tok = _toon_string_token(str(item), delimiter=",")
+            lines.append(item_indent + "- " + tok)
+
+
+def _toon_encode_object(lines: list[str], indent: int, obj: dict[str, object]) -> None:
+    for key in sorted(obj.keys()):
+        value = obj[key]
+        _toon_encode_value(lines, indent, key, value)
+
+
+def _toon_encode_value(lines: list[str], indent: int, key: str, value: object) -> None:
+    indent_str = "  " * indent
+    if isinstance(value, dict):
+        name = _toon_key_token(key)
+        lines.append(f"{indent_str}{name}:")
+        if value:
+            _toon_encode_object(lines, indent + 1, value)
+        return
+    if isinstance(value, list):
+        _toon_encode_array(lines, indent, key, value, anonymous=False)
+        return
+
+    tok = _toon_primitive_token(value)
+    if tok is None:
+        tok = _toon_string_token(str(value), delimiter=",")
+    lines.append(f"{indent_str}{_toon_key_token(key)}: {tok}")
+
+
+def _toon_dump(root: object) -> str:
+    if root is None:
+        return ""
+
+    lines: list[str] = []
+    if isinstance(root, dict):
+        _toon_encode_object(lines, 0, root)
+        return "\n".join(lines)
+    if isinstance(root, list):
+        _toon_encode_array(lines, 0, "", root, anonymous=True)
+        return "\n".join(lines)
+
+    tok = _toon_primitive_token(root)
+    if tok is None:
+        tok = _toon_string_token(str(root), delimiter=",")
+    return tok
+
+
 def _file_artifact(path: Path) -> dict[str, object]:
     import hashlib
 
@@ -632,6 +861,10 @@ def _sfx_metadata_payload(
 def _emit_sfx_metadata(args: Namespace, payload: dict[str, object]) -> None:
     if args.metadata is None:
         return
+    if args.metadata.suffix.lower() == ".toon":
+        _ensure_parent_dir(args.metadata)
+        args.metadata.write_text(_toon_dump(payload) + "\n", encoding="utf-8")
+        return
     if args.metadata.suffix.lower() == ".toml":
         _ensure_parent_dir(args.metadata)
         args.metadata.write_text(_toml_dump(payload), encoding="utf-8")
@@ -679,7 +912,9 @@ def _handle_sfx_midi(args: Namespace, *, sfx, kind: str, output_path: Path) -> i
 
     if args.no_save:
         _emit_sfx_metadata(args, payload)
-        if getattr(args, "toml", False):
+        if getattr(args, "toon", False):
+            print(_toon_dump(payload))
+        elif getattr(args, "toml", False):
             print(_toml_dump(payload), end="")
         elif getattr(args, "json", False):
             print(json.dumps(payload, indent=2))
@@ -690,7 +925,9 @@ def _handle_sfx_midi(args: Namespace, *, sfx, kind: str, output_path: Path) -> i
     _ensure_parent_dir(output_path)
     sfx.save(midi_bytes, str(output_path))
     payload["artifact"] = _file_artifact(output_path)
-    if getattr(args, "toml", False):
+    if getattr(args, "toon", False):
+        print(_toon_dump(payload))
+    elif getattr(args, "toml", False):
         print(_toml_dump(payload), end="")
     elif getattr(args, "json", False):
         print(json.dumps(payload, indent=2))
@@ -722,7 +959,9 @@ def _handle_sfx_wav(args: Namespace, *, sfx, kind: str, output_path: Path) -> in
 
     if args.no_save:
         _emit_sfx_metadata(args, payload)
-        if getattr(args, "toml", False):
+        if getattr(args, "toon", False):
+            print(_toon_dump(payload))
+        elif getattr(args, "toml", False):
             print(_toml_dump(payload), end="")
         elif getattr(args, "json", False):
             print(json.dumps(payload, indent=2))
@@ -736,7 +975,9 @@ def _handle_sfx_wav(args: Namespace, *, sfx, kind: str, output_path: Path) -> in
     _ensure_parent_dir(output_path)
     output_path.write_bytes(wav_bytes)
     payload["artifact"] = _file_artifact(output_path)
-    if getattr(args, "toml", False):
+    if getattr(args, "toon", False):
+        print(_toon_dump(payload))
+    elif getattr(args, "toml", False):
         print(_toml_dump(payload), end="")
     elif getattr(args, "json", False):
         print(json.dumps(payload, indent=2))
@@ -762,6 +1003,11 @@ def _add_generate_command(subparsers) -> None:
         "--toml",
         action="store_true",
         help="Output machine-readable TOML metadata",
+    )
+    output_group.add_argument(
+        "--toon",
+        action="store_true",
+        help="Output machine-readable TOON metadata (Token-Oriented Object Notation)",
     )
     gen_parser.add_argument(
         "--preset",
@@ -935,6 +1181,11 @@ def _add_sfx_command(subparsers) -> None:
         action="store_true",
         help="Output machine-readable TOML metadata",
     )
+    output_group.add_argument(
+        "--toon",
+        action="store_true",
+        help="Output machine-readable TOON metadata (Token-Oriented Object Notation)",
+    )
     sfx_parser.add_argument(
         "--metadata",
         type=Path,
@@ -960,6 +1211,11 @@ def _add_list_command(subparsers) -> None:
         "--toml",
         action="store_true",
         help="Output machine-readable TOML",
+    )
+    output_group.add_argument(
+        "--toon",
+        action="store_true",
+        help="Output machine-readable TOON (Token-Oriented Object Notation)",
     )
     list_parser.add_argument(
         "category",
@@ -1003,6 +1259,11 @@ def _add_schema_command(subparsers) -> None:
         action="store_true",
         help="Output schema as TOML (lossless, but JSON is the native format)",
     )
+    schema_parser.add_argument(
+        "--toon",
+        action="store_true",
+        help="Output schema as TOON (Token-Oriented Object Notation)",
+    )
     schema_parser.set_defaults(func=cmd_schema)
 
 
@@ -1015,6 +1276,11 @@ def _add_doctor_command(subparsers) -> None:
     output_group = doctor_parser.add_mutually_exclusive_group()
     output_group.add_argument("--json", action="store_true", help="Output machine-readable JSON")
     output_group.add_argument("--toml", action="store_true", help="Output machine-readable TOML")
+    output_group.add_argument(
+        "--toon",
+        action="store_true",
+        help="Output machine-readable TOON (Token-Oriented Object Notation)",
+    )
     doctor_parser.set_defaults(func=cmd_doctor)
 
 
@@ -1065,6 +1331,8 @@ def _prepare_generate_args(args: Namespace) -> None:
             args.json = True
     if args.jsonl:
         args.json = True
+    if getattr(args, "toon", False) and args.jsonl:
+        raise ValueError("Use only one of --jsonl or --toon")
     if getattr(args, "toml", False) and args.jsonl:
         raise ValueError("Use only one of --jsonl or --toml")
     if args.count < 1:
@@ -1213,6 +1481,9 @@ def _emit_generate_payloads(
     if args.jsonl:
         for payload in payloads:
             print(json.dumps(payload, separators=(",", ":")))
+    elif getattr(args, "toon", False):
+        value: object = payloads[0] if len(payloads) == 1 else payloads
+        print(_toon_dump(value))
     elif getattr(args, "toml", False):
         print(_toml_dump(payloads[0] if len(payloads) == 1 else payloads, array_key="runs"), end="")
     elif args.json:
@@ -1227,6 +1498,12 @@ def _emit_generate_payloads(
     if getattr(args, "metadata", None):
         if args.jsonl:
             _write_metadata_jsonl(args.metadata, payloads)
+        elif args.metadata.suffix.lower() == ".toon":
+            _ensure_parent_dir(args.metadata)
+            args.metadata.write_text(
+                _toon_dump(payloads[0] if len(payloads) == 1 else payloads) + "\n",
+                encoding="utf-8",
+            )
         elif args.metadata.suffix.lower() == ".toml":
             _ensure_parent_dir(args.metadata)
             args.metadata.write_text(
@@ -1307,7 +1584,9 @@ def cmd_sfx(args: Namespace) -> int:
             tempo=sfx.tempo,
             notes=notes,
         )
-        if getattr(args, "toml", False):
+        if getattr(args, "toon", False):
+            print(_toon_dump(payload))
+        elif getattr(args, "toml", False):
             print(_toml_dump(payload), end="")
         elif getattr(args, "json", False):
             print(json.dumps(payload, indent=2))
@@ -1335,6 +1614,18 @@ def cmd_list(args: Namespace) -> int:
             payload["sfx"] = _as_json_items(SFX_ITEMS)
 
         print(json.dumps(payload, indent=2))
+        return 0
+
+    if getattr(args, "toon", False):
+        payload: dict[str, object] = {"program": "chiptune", "version": get_version(), "schema": 1}
+        if category in ("presets", "all"):
+            payload["presets"] = _as_json_items(GENRE_PRESET_ITEMS)
+        if category in ("effects", "all"):
+            payload["effects"] = _as_json_items(EFFECT_PRESET_ITEMS)
+        if category in ("sfx", "all"):
+            payload["sfx"] = _as_json_items(SFX_ITEMS)
+
+        print(_toon_dump(payload))
         return 0
 
     if getattr(args, "toml", False):
@@ -1396,7 +1687,7 @@ _chiptune_complete() {{
     generate)
       local opts="--preset -p --output -o --output-template --bars -b --count --root -r --bpm \\
 --effects -e --no-drums --no-bass --no-counter --seed -s --format -f \\
---play --no-save --json --toml --jsonl --dry-run --plan --metadata"
+--play --no-save --json --toml --toon --jsonl --dry-run --plan --metadata"
       if [[ "$prev" == "--preset" || "$prev" == "-p" ]]; then
         COMPREPLY=( $(compgen -W "{presets}" -- "$cur") )
         return 0
@@ -1413,7 +1704,8 @@ _chiptune_complete() {{
       return 0
       ;;
     sfx)
-      local opts="--output -o --format --play --no-save --dry-run --plan --json --toml --metadata"
+      local opts="--output -o --format --play --no-save --dry-run --plan \\
+--json --toml --toon --metadata"
       if [[ $COMP_CWORD -eq 2 ]]; then
         COMPREPLY=( $(compgen -W "{sfx}" -- "$cur") )
         return 0
@@ -1426,7 +1718,7 @@ _chiptune_complete() {{
       return 0
       ;;
     list)
-      local opts="--json --toml"
+      local opts="--json --toml --toon"
       if [[ $COMP_CWORD -eq 2 ]]; then
         COMPREPLY=( $(compgen -W "presets effects sfx all $opts" -- "$cur") )
         return 0
@@ -1445,12 +1737,12 @@ _chiptune_complete() {{
         COMPREPLY=( $(compgen -W "all generate sfx list doctor" -- "$cur") )
         return 0
       fi
-      local opts="--toml"
+      local opts="--toml --toon"
       COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
       return 0
       ;;
     doctor)
-      local opts="--json --toml"
+      local opts="--json --toml --toon"
       COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
       return 0
       ;;
@@ -1666,12 +1958,18 @@ def cmd_schema(args: Namespace) -> int:
             "dialect": _json_schema_dialect(),
             "schemas": schemas,
         }
+        if getattr(args, "toon", False):
+            print(_toon_dump(payload))
+            return 0
         if getattr(args, "toml", False):
             print(_toml_dump(payload), end="")
             return 0
         print(json.dumps(payload, indent=2))
         return 0
 
+    if getattr(args, "toon", False):
+        print(_toon_dump(schemas[args.target]))
+        return 0
     if getattr(args, "toml", False):
         print(_toml_dump(schemas[args.target]), end="")
         return 0
@@ -1711,6 +2009,9 @@ def cmd_doctor(args: Namespace) -> int:
 
     if args.json:
         print(json.dumps(payload, indent=2))
+        return 0
+    if getattr(args, "toon", False):
+        print(_toon_dump(payload))
         return 0
     if getattr(args, "toml", False):
         print(_toml_dump(payload), end="")
