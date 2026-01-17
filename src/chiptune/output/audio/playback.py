@@ -14,7 +14,7 @@ class AudioPlayer(BaseModel):
     """Real-time audio playback for previewing compositions.
 
     Requires optional 'sounddevice' dependency:
-        pip install py-chiptune[audio]
+        pip install flexinfer-chiptune[audio]
 
     Example:
         ```python
@@ -48,7 +48,7 @@ class AudioPlayer(BaseModel):
             import sounddevice as sd
         except ImportError as e:
             raise ImportError(
-                "sounddevice not installed. Install with: pip install py-chiptune[audio]"
+                "sounddevice not installed. Install with: pip install flexinfer-chiptune[audio]"
             ) from e
 
         sd.play(samples, self.sample_rate)

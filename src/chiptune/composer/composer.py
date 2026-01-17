@@ -711,7 +711,7 @@ class ChiptuneComposer(BaseModel):
         """Play the composition (requires sounddevice).
 
         Renders and plays the audio. Blocks until complete.
-        Requires: pip install py-chiptune[audio]
+        Requires: pip install flexinfer-chiptune[audio]
         """
         from chiptune.output.audio import AudioExporter, AudioPlayer
 

@@ -45,11 +45,17 @@ chiptune generate --preset battle --output battle.wav
 # Generate with custom settings
 chiptune generate --preset overworld --root G --bpm 130 --bars 16 --effects space
 
+# Preview audio (requires `flexinfer-chiptune[audio]`)
+chiptune generate --preset battle --play --no-save
+
 # Generate a sound effect
 chiptune sfx coin --output coin.mid
 
 # List all available presets
 chiptune list all
+
+# Machine-readable inventory (for agents)
+chiptune list --json
 ```
 
 ### Using Genre Presets

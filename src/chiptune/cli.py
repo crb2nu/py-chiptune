@@ -5,13 +5,14 @@ from the terminal.
 
 Usage:
     chiptune generate --preset battle --output battle.wav
-    chiptune sfx explosion --output explosion.wav
+    chiptune sfx explosion --output explosion.mid
     chiptune list presets
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -20,17 +21,206 @@ if TYPE_CHECKING:
     from argparse import Namespace
 
 
+GENRE_PRESET_METHODS: dict[str, str] = {
+    "battle": "battle_theme",
+    "overworld": "overworld",
+    "dungeon": "dungeon",
+    "victory": "victory_fanfare",
+    "title": "title_screen",
+    "shop": "shop_theme",
+    "sad": "sad_scene",
+    "chase": "chase_scene",
+}
+
+GENRE_PRESET_ITEMS: list[tuple[str, str]] = [
+    ("battle", "Intense battle/boss fight music (A minor, 165 BPM)"),
+    ("overworld", "Adventurous exploration theme (C major, 120 BPM)"),
+    ("dungeon", "Dark, mysterious atmosphere (E dorian, 85 BPM)"),
+    ("victory", "Short victory fanfare (C lydian, 140 BPM)"),
+    ("title", "Catchy title screen music (F major, 130 BPM)"),
+    ("shop", "Cheerful shop/menu music (G mixolydian, 115 BPM)"),
+    ("sad", "Emotional, melancholic scene (D minor, 70 BPM)"),
+    ("chase", "Fast-paced action music (E phrygian, 185 BPM)"),
+]
+
+EFFECT_PRESET_METHODS: dict[str, str] = {
+    "clean": "clean",
+    "retro": "retro_gaming",
+    "space": "space_adventure",
+    "lofi": "lo_fi_nostalgia",
+    "arcade": "arcade_cabinet",
+    "dreamy": "dreamy",
+    "dungeon": "dungeon_reverb",
+    "boss": "boss_battle",
+}
+
+EFFECT_PRESET_ITEMS: list[tuple[str, str]] = [
+    ("clean", "No effects - dry signal"),
+    ("retro", "Classic retro gaming (subtle chorus + echo)"),
+    ("space", "Sci-fi atmosphere (lush chorus + space delay)"),
+    ("lofi", "Lo-fi nostalgia (tape delay + tremolo)"),
+    ("arcade", "Bright arcade sound (chorus + slapback)"),
+    ("dreamy", "Ethereal floating feel (heavy effects)"),
+    ("dungeon", "Cavernous reverb atmosphere"),
+    ("boss", "Punchy minimal effects for clarity"),
+]
+
+SFX_METHODS: dict[str, str] = {
+    "jump": "jump",
+    "land": "land",
+    "coin": "coin_collect",
+    "powerup": "powerup",
+    "damage": "damage",
+    "explosion": "explosion",
+    "laser": "laser",
+    "shield": "shield",
+    "teleport": "teleport",
+    "menu_select": "menu_select",
+    "menu_confirm": "menu_confirm",
+    "menu_back": "menu_back",
+    "success": "success",
+    "error": "error",
+    "door_open": "door_open",
+    "door_close": "door_close",
+    "heartbeat": "heartbeat",
+    "countdown": "countdown_tick",
+    "countdown_final": "countdown_final",
+}
+
+SFX_ITEMS: list[tuple[str, str]] = [
+    ("jump", "Character jump sound"),
+    ("land", "Landing thud"),
+    ("coin", "Coin/pickup collect"),
+    ("powerup", "Power-up acquisition"),
+    ("damage", "Take damage/hit"),
+    ("explosion", "Explosion effect"),
+    ("laser", "Laser/projectile fire"),
+    ("shield", "Shield activation"),
+    ("teleport", "Teleport effect"),
+    ("menu_select", "Menu selection"),
+    ("menu_confirm", "Menu confirm action"),
+    ("menu_back", "Menu back/cancel"),
+    ("success", "Success/achievement"),
+    ("error", "Error/invalid action"),
+    ("door_open", "Door opening"),
+    ("door_close", "Door closing"),
+    ("heartbeat", "Heartbeat/tension"),
+    ("countdown", "Countdown tick"),
+    ("countdown_final", "Final countdown stinger"),
+]
+
+
+def get_version() -> str:
+    """Return the installed distribution version, with a source-tree fallback."""
+    try:
+        from importlib.metadata import PackageNotFoundError, version
+    except ImportError:
+        PackageNotFoundError = Exception  # type: ignore[assignment]
+        version = None  # type: ignore[assignment]
+
+    if version is not None:
+        try:
+            return version("flexinfer-chiptune")
+        except PackageNotFoundError:
+            pass
+
+    try:
+        from chiptune._version import __version__
+
+        return __version__
+    except Exception:
+        return "unknown"
+
+
+def _infer_format_from_path(path: Path) -> str | None:
+    suffix = path.suffix.lower()
+    if suffix in {".mid", ".midi"}:
+        return "midi"
+    if suffix in {".wav"}:
+        return "wav"
+    return None
+
+
+def _ensure_parent_dir(path: Path) -> None:
+    parent = path.parent
+    if str(parent) not in {"", "."}:
+        parent.mkdir(parents=True, exist_ok=True)
+
+
+def _as_json_items(items: list[tuple[str, str]]) -> list[dict[str, str]]:
+    return [{"name": name, "description": desc} for name, desc in items]
+
+
+def _resolve_generate_output(format_opt: str | None, output: Path | None) -> tuple[bool, str, Path]:
+    format_was_explicit = format_opt is not None
+    resolved_format = format_opt
+
+    if resolved_format is None:
+        if output is not None:
+            inferred = _infer_format_from_path(output)
+            resolved_format = inferred if inferred is not None else "wav"
+        else:
+            resolved_format = "wav"
+
+    if output is None:
+        output_path = Path("output.mid") if resolved_format == "midi" else Path("output.wav")
+    else:
+        output_path = output
+    if output_path.suffix == "":
+        output_path = output_path.with_suffix(".mid" if resolved_format == "midi" else ".wav")
+
+    return format_was_explicit, resolved_format, output_path
+
+
+def _build_track(args: Namespace):
+    from chiptune.presets import GenrePresets
+
+    preset_method = GENRE_PRESET_METHODS[args.preset]
+    preset_factory = getattr(GenrePresets, preset_method)
+    composer = preset_factory(root=args.root) if args.root else preset_factory()
+
+    if args.bpm:
+        composer.bpm = args.bpm
+
+    composer.add_melody(length_bars=args.bars)
+
+    if not args.no_counter:
+        composer.add_countermelody()
+
+    if not args.no_bass:
+        composer.add_bass()
+
+    if not args.no_drums and args.preset not in ["sad", "victory"]:
+        composer.add_drums()
+
+    return composer.build()
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create the argument parser."""
     parser = argparse.ArgumentParser(
         prog="chiptune",
         description="Generate retro 8-bit/16-bit style music and sound effects.",
-        epilog="Example: chiptune generate --preset battle --output music.wav",
+        epilog=(
+            "Examples:\n"
+            "  chiptune generate --preset battle --output battle.wav\n"
+            "  chiptune generate --preset overworld --format midi --output overworld.mid\n"
+            "  chiptune generate --preset battle --play --no-save\n"
+            "  chiptune sfx coin --output coin.mid\n"
+            "  chiptune list all\n"
+            "  chiptune list --json\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s 0.5.2",
+        version=f"%(prog)s {get_version()}",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Show full exception tracebacks on errors",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -44,16 +234,7 @@ def create_parser() -> argparse.ArgumentParser:
     gen_parser.add_argument(
         "--preset",
         "-p",
-        choices=[
-            "battle",
-            "overworld",
-            "dungeon",
-            "victory",
-            "title",
-            "shop",
-            "sad",
-            "chase",
-        ],
+        choices=[name for name, _ in GENRE_PRESET_ITEMS],
         default="overworld",
         help="Genre preset (default: overworld)",
     )
@@ -61,8 +242,8 @@ def create_parser() -> argparse.ArgumentParser:
         "--output",
         "-o",
         type=Path,
-        default=Path("output.wav"),
-        help="Output file path (default: output.wav)",
+        default=None,
+        help="Output file path (default: output.wav / output.mid)",
     )
     gen_parser.add_argument(
         "--bars",
@@ -86,16 +267,7 @@ def create_parser() -> argparse.ArgumentParser:
     gen_parser.add_argument(
         "--effects",
         "-e",
-        choices=[
-            "clean",
-            "retro",
-            "space",
-            "lofi",
-            "arcade",
-            "dreamy",
-            "dungeon",
-            "boss",
-        ],
+        choices=[name for name, _ in EFFECT_PRESET_ITEMS],
         default="retro",
         help="Effect preset (default: retro)",
     )
@@ -125,9 +297,20 @@ def create_parser() -> argparse.ArgumentParser:
         "--format",
         "-f",
         choices=["wav", "midi"],
-        default="wav",
-        help="Output format (default: wav)",
+        default=None,
+        help="Output format (default: inferred from --output, else wav)",
     )
+    gen_parser.add_argument(
+        "--play",
+        action="store_true",
+        help="Play the generated audio (requires optional 'audio' extras)",
+    )
+    gen_parser.add_argument(
+        "--no-save",
+        action="store_true",
+        help="Do not write an output file (useful with --play)",
+    )
+    gen_parser.set_defaults(func=cmd_generate)
 
     # SFX command
     sfx_parser = subparsers.add_parser(
@@ -137,35 +320,17 @@ def create_parser() -> argparse.ArgumentParser:
     )
     sfx_parser.add_argument(
         "type",
-        choices=[
-            "jump",
-            "land",
-            "coin",
-            "powerup",
-            "damage",
-            "explosion",
-            "laser",
-            "shield",
-            "teleport",
-            "menu_select",
-            "menu_confirm",
-            "menu_back",
-            "success",
-            "error",
-            "door_open",
-            "door_close",
-            "heartbeat",
-            "countdown",
-        ],
+        choices=[name for name, _ in SFX_ITEMS],
         help="Type of sound effect to generate",
     )
     sfx_parser.add_argument(
         "--output",
         "-o",
         type=Path,
-        default=Path("sfx.mid"),
-        help="Output file path (default: sfx.mid)",
+        default=None,
+        help="Output file path (default: <type>.mid)",
     )
+    sfx_parser.set_defaults(func=cmd_sfx)
 
     # List command
     list_parser = subparsers.add_parser(
@@ -174,12 +339,18 @@ def create_parser() -> argparse.ArgumentParser:
         description="Display available presets, effects, and sound effect types.",
     )
     list_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output machine-readable JSON",
+    )
+    list_parser.add_argument(
         "category",
         nargs="?",
         choices=["presets", "effects", "sfx", "all"],
         default="all",
         help="Category to list (default: all)",
     )
+    list_parser.set_defaults(func=cmd_list)
 
     return parser
 
@@ -188,77 +359,69 @@ def cmd_generate(args: Namespace) -> int:
     """Execute the generate command."""
     import random
 
-    from chiptune.output.audio import AudioExporter
-    from chiptune.output.midi import MidiExporter
-    from chiptune.presets import EffectPresets, GenrePresets
-
     # Set seed if provided
     if args.seed is not None:
         random.seed(args.seed)
 
-    # Get genre preset
-    preset_map = {
-        "battle": GenrePresets.battle_theme,
-        "overworld": GenrePresets.overworld,
-        "dungeon": GenrePresets.dungeon,
-        "victory": GenrePresets.victory_fanfare,
-        "title": GenrePresets.title_screen,
-        "shop": GenrePresets.shop_theme,
-        "sad": GenrePresets.sad_scene,
-        "chase": GenrePresets.chase_scene,
-    }
+    format_was_explicit, resolved_format, output_path = _resolve_generate_output(
+        args.format, args.output
+    )
+    if format_was_explicit and args.output is not None:
+        inferred = _infer_format_from_path(args.output)
+        if inferred is not None and inferred != resolved_format:
+            raise ValueError(
+                f"--format {resolved_format} conflicts with --output extension {args.output.suffix}"
+            )
 
-    # Get root from args or use None for preset default
-    root = args.root if args.root else None
+    if not args.no_save:
+        _ensure_parent_dir(output_path)
 
-    if root:
-        composer = preset_map[args.preset](root=root)
-    else:
-        composer = preset_map[args.preset]()
+    track = _build_track(args)
 
-    # Override BPM if specified
-    if args.bpm:
-        composer.bpm = args.bpm
+    needs_audio = args.play or (not args.no_save and resolved_format == "wav")
+    effects = None
+    rendered_audio = None
 
-    # Add tracks
-    composer.add_melody(length_bars=args.bars)
+    if needs_audio:
+        from chiptune.output.audio import AudioExporter, AudioPlayer
+        from chiptune.presets import EffectPresets
 
-    if not args.no_counter:
-        composer.add_countermelody()
+        audio_exporter = AudioExporter()
+        if args.effects:
+            effect_method = EFFECT_PRESET_METHODS[args.effects]
+            effects = getattr(EffectPresets, effect_method)()
 
-    if not args.no_bass:
-        composer.add_bass()
+        if args.play:
+            if not AudioPlayer.is_available():
+                raise ImportError(
+                    "Audio playback requires optional dependencies. Install with: "
+                    "pip install 'flexinfer-chiptune[audio]'"
+                )
+            rendered_audio = audio_exporter.render_track(track, effects=effects)
+            AudioPlayer().play(rendered_audio)
 
-    if not args.no_drums and args.preset not in ["sad", "victory"]:
-        composer.add_drums()
+    if args.no_save:
+        return 0
 
-    # Build track
-    track = composer.build()
+    if resolved_format == "midi":
+        from chiptune.output.midi import MidiExporter
 
-    # Get effect preset
-    effect_map = {
-        "clean": EffectPresets.clean,
-        "retro": EffectPresets.retro_gaming,
-        "space": EffectPresets.space_adventure,
-        "lofi": EffectPresets.lo_fi_nostalgia,
-        "arcade": EffectPresets.arcade_cabinet,
-        "dreamy": EffectPresets.dreamy,
-        "dungeon": EffectPresets.dungeon_reverb,
-        "boss": EffectPresets.boss_battle,
-    }
-    effects = effect_map[args.effects]()
-
-    # Export
-    output_path = args.output
-
-    if args.format == "midi" or str(output_path).endswith(".mid"):
         midi_exporter = MidiExporter()
         midi_exporter.export_file(track, str(output_path))
         print(f"Exported MIDI to: {output_path}")
+        return 0
+
+    from chiptune.output.audio import AudioExporter
+
+    audio_exporter = AudioExporter()
+    if rendered_audio is not None:
+        import soundfile as sf
+
+        sf.write(str(output_path), rendered_audio, audio_exporter.sample_rate, subtype="PCM_16")
     else:
-        audio_exporter = AudioExporter()
-        audio_exporter.export_wav(track, output_path, effects=effects)
-        print(f"Exported WAV to: {output_path}")
+        audio_exporter.export_wav(track, str(output_path), effects=effects)
+
+    print(f"Exported WAV to: {output_path}")
 
     return 0
 
@@ -269,38 +432,22 @@ def cmd_sfx(args: Namespace) -> int:
 
     sfx = SFXGenerator()
 
-    # Map CLI names to method names
-    method_map = {
-        "jump": "jump",
-        "land": "land",
-        "coin": "coin_collect",
-        "powerup": "powerup",
-        "damage": "damage",
-        "explosion": "explosion",
-        "laser": "laser",
-        "shield": "shield",
-        "teleport": "teleport",
-        "menu_select": "menu_select",
-        "menu_confirm": "menu_confirm",
-        "menu_back": "menu_back",
-        "success": "success",
-        "error": "error",
-        "door_open": "door_open",
-        "door_close": "door_close",
-        "heartbeat": "heartbeat",
-        "countdown": "countdown_tick",
-    }
+    output_path: Path = args.output or Path(f"{args.type}.mid")
+    if output_path.suffix == "":
+        output_path = output_path.with_suffix(".mid")
 
-    method_name = method_map[args.type]
+    _ensure_parent_dir(output_path)
+
+    method_name = SFX_METHODS[args.type]
     generator_method = getattr(sfx, method_name)
 
     # Generate MIDI bytes
     midi_bytes = generator_method()
 
     # Save to file
-    sfx.save(midi_bytes, str(args.output))
+    sfx.save(midi_bytes, str(output_path))
 
-    print(f"Exported {args.type} SFX to: {args.output}")
+    print(f"Exported {args.type} SFX to: {output_path}")
     return 0
 
 
@@ -308,62 +455,34 @@ def cmd_list(args: Namespace) -> int:
     """Execute the list command."""
     category = args.category
 
+    if args.json:
+        payload: dict[str, object] = {}
+        if category in ("presets", "all"):
+            payload["presets"] = _as_json_items(GENRE_PRESET_ITEMS)
+        if category in ("effects", "all"):
+            payload["effects"] = _as_json_items(EFFECT_PRESET_ITEMS)
+        if category in ("sfx", "all"):
+            payload["sfx"] = _as_json_items(SFX_ITEMS)
+
+        print(json.dumps(payload, indent=2))
+        return 0
+
     if category in ("presets", "all"):
         print("\nGenre Presets:")
         print("-" * 40)
-        presets = [
-            ("battle", "Intense battle/boss fight music (A minor, 165 BPM)"),
-            ("overworld", "Adventurous exploration theme (C major, 120 BPM)"),
-            ("dungeon", "Dark, mysterious atmosphere (E dorian, 85 BPM)"),
-            ("victory", "Short victory fanfare (C lydian, 140 BPM)"),
-            ("title", "Catchy title screen music (F major, 130 BPM)"),
-            ("shop", "Cheerful shop/menu music (G mixolydian, 115 BPM)"),
-            ("sad", "Emotional, melancholic scene (D minor, 70 BPM)"),
-            ("chase", "Fast-paced action music (E phrygian, 185 BPM)"),
-        ]
-        for name, desc in presets:
+        for name, desc in GENRE_PRESET_ITEMS:
             print(f"  {name:12} {desc}")
 
     if category in ("effects", "all"):
         print("\nEffect Presets:")
         print("-" * 40)
-        effects = [
-            ("clean", "No effects - dry signal"),
-            ("retro", "Classic retro gaming (subtle chorus + echo)"),
-            ("space", "Sci-fi atmosphere (lush chorus + space delay)"),
-            ("lofi", "Lo-fi nostalgia (tape delay + tremolo)"),
-            ("arcade", "Bright arcade sound (chorus + slapback)"),
-            ("dreamy", "Ethereal floating feel (heavy effects)"),
-            ("dungeon", "Cavernous reverb atmosphere"),
-            ("boss", "Punchy minimal effects for clarity"),
-        ]
-        for name, desc in effects:
+        for name, desc in EFFECT_PRESET_ITEMS:
             print(f"  {name:12} {desc}")
 
     if category in ("sfx", "all"):
         print("\nSound Effects (outputs MIDI):")
         print("-" * 40)
-        sfx_types = [
-            ("jump", "Character jump sound"),
-            ("land", "Landing thud"),
-            ("coin", "Coin/pickup collect"),
-            ("powerup", "Power-up acquisition"),
-            ("damage", "Take damage/hit"),
-            ("explosion", "Explosion effect"),
-            ("laser", "Laser/projectile fire"),
-            ("shield", "Shield activation"),
-            ("teleport", "Teleport effect"),
-            ("menu_select", "Menu selection"),
-            ("menu_confirm", "Menu confirm action"),
-            ("menu_back", "Menu back/cancel"),
-            ("success", "Success/achievement"),
-            ("error", "Error/invalid action"),
-            ("door_open", "Door opening"),
-            ("door_close", "Door closing"),
-            ("heartbeat", "Heartbeat/tension"),
-            ("countdown", "Countdown tick"),
-        ]
-        for name, desc in sfx_types:
+        for name, desc in SFX_ITEMS:
             print(f"  {name:14} {desc}")
 
     print()
@@ -373,20 +492,23 @@ def cmd_list(args: Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     """Main entry point for the CLI."""
     parser = create_parser()
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as e:
+        code = e.code if isinstance(e.code, int) else 1
+        return code
 
     if args.command is None:
         parser.print_help()
         return 0
 
-    if args.command == "generate":
-        return cmd_generate(args)
-    elif args.command == "sfx":
-        return cmd_sfx(args)
-    elif args.command == "list":
-        return cmd_list(args)
-
-    return 0
+    try:
+        return args.func(args)
+    except Exception as e:
+        if getattr(args, "debug", False):
+            raise
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
