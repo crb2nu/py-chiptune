@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -166,6 +167,97 @@ def _write_metadata_jsonl(path: Path, payloads: list[dict[str, object]]) -> None
     _ensure_parent_dir(path)
     lines = [json.dumps(payload, separators=(",", ":")) for payload in payloads]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _toml_quote_string(value: str) -> str:
+    escaped = (
+        value.replace("\\", "\\\\")
+        .replace("\t", "\\t")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace('"', '\\"')
+    )
+    return f'"{escaped}"'
+
+
+def _toml_key(key: str) -> str:
+    if re.fullmatch(r"[A-Za-z0-9_-]+", key):
+        return key
+    return _toml_quote_string(key)
+
+
+def _toml_scalar(value: object) -> str:
+    import math
+
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        if math.isnan(value):
+            return _toml_quote_string("NaN")
+        if math.isinf(value) and value > 0:
+            return _toml_quote_string("Infinity")
+        if math.isinf(value) and value < 0:
+            return _toml_quote_string("-Infinity")
+        return repr(value)
+    if isinstance(value, str):
+        return _toml_quote_string(value)
+    raise TypeError(f"Unsupported TOML scalar: {type(value)!r}")
+
+
+def _toml_is_scalar(value: object) -> bool:
+    return isinstance(value, (str, int, float, bool))
+
+
+def _toml_dump(root: object, *, array_key: str = "items") -> str:
+    if root is None:
+        return ""
+
+    if isinstance(root, list):
+        return _toml_dump({array_key: root})
+
+    if not isinstance(root, dict):
+        raise TypeError("TOML output requires a dict (or list of dicts).")
+
+    lines: list[str] = []
+
+    def emit_kv(prefix: list[str], data: dict[str, object]) -> None:
+        scalar_items: list[tuple[str, str]] = []
+        dict_items: list[tuple[str, dict[str, object]]] = []
+        list_table_items: list[tuple[str, list[dict[str, object]]]] = []
+
+        for key, value in data.items():
+            if value is None:
+                continue
+            if isinstance(value, dict):
+                dict_items.append((key, value))
+            elif isinstance(value, list) and all(isinstance(item, dict) for item in value):
+                list_table_items.append((key, value))  # type: ignore[arg-type]
+            elif isinstance(value, list) and all(_toml_is_scalar(item) for item in value):
+                rendered = ", ".join(_toml_scalar(item) for item in value)  # type: ignore[arg-type]
+                scalar_items.append((key, f"[{rendered}]"))
+            elif _toml_is_scalar(value):
+                scalar_items.append((key, _toml_scalar(value)))
+            else:
+                scalar_items.append((key, _toml_quote_string(str(value))))
+
+        for key, rendered in scalar_items:
+            lines.append(f"{_toml_key(key)} = {rendered}")
+
+        for key, tables in list_table_items:
+            for table in tables:
+                header = ".".join([_toml_key(p) for p in prefix] + [_toml_key(key)])
+                lines.append(f"[[{header}]]")
+                emit_kv([*prefix, key], table)
+
+        for key, sub in dict_items:
+            header = ".".join([_toml_key(p) for p in prefix] + [_toml_key(key)])
+            lines.append(f"[{header}]")
+            emit_kv([*prefix, key], sub)
+
+    emit_kv([], root)
+    return "\n".join(lines) + ("\n" if lines else "")
 
 
 def _file_artifact(path: Path) -> dict[str, object]:
@@ -540,6 +632,10 @@ def _sfx_metadata_payload(
 def _emit_sfx_metadata(args: Namespace, payload: dict[str, object]) -> None:
     if args.metadata is None:
         return
+    if args.metadata.suffix.lower() == ".toml":
+        _ensure_parent_dir(args.metadata)
+        args.metadata.write_text(_toml_dump(payload), encoding="utf-8")
+        return
     _write_metadata(args.metadata, payload)
 
 
@@ -583,7 +679,9 @@ def _handle_sfx_midi(args: Namespace, *, sfx, kind: str, output_path: Path) -> i
 
     if args.no_save:
         _emit_sfx_metadata(args, payload)
-        if getattr(args, "json", False):
+        if getattr(args, "toml", False):
+            print(_toml_dump(payload), end="")
+        elif getattr(args, "json", False):
             print(json.dumps(payload, indent=2))
         return 0
 
@@ -592,7 +690,9 @@ def _handle_sfx_midi(args: Namespace, *, sfx, kind: str, output_path: Path) -> i
     _ensure_parent_dir(output_path)
     sfx.save(midi_bytes, str(output_path))
     payload["artifact"] = _file_artifact(output_path)
-    if getattr(args, "json", False):
+    if getattr(args, "toml", False):
+        print(_toml_dump(payload), end="")
+    elif getattr(args, "json", False):
         print(json.dumps(payload, indent=2))
     else:
         print(f"Exported {args.type} SFX (MIDI) to: {output_path}")
@@ -622,7 +722,9 @@ def _handle_sfx_wav(args: Namespace, *, sfx, kind: str, output_path: Path) -> in
 
     if args.no_save:
         _emit_sfx_metadata(args, payload)
-        if getattr(args, "json", False):
+        if getattr(args, "toml", False):
+            print(_toml_dump(payload), end="")
+        elif getattr(args, "json", False):
             print(json.dumps(payload, indent=2))
         return 0
 
@@ -634,7 +736,9 @@ def _handle_sfx_wav(args: Namespace, *, sfx, kind: str, output_path: Path) -> in
     _ensure_parent_dir(output_path)
     output_path.write_bytes(wav_bytes)
     payload["artifact"] = _file_artifact(output_path)
-    if getattr(args, "json", False):
+    if getattr(args, "toml", False):
+        print(_toml_dump(payload), end="")
+    elif getattr(args, "json", False):
         print(json.dumps(payload, indent=2))
     else:
         print(f"Exported {args.type} SFX (WAV) to: {output_path}")
@@ -647,6 +751,17 @@ def _add_generate_command(subparsers) -> None:
         "generate",
         help="Generate chiptune music",
         description="Generate music using genre presets or custom settings.",
+    )
+    output_group = gen_parser.add_mutually_exclusive_group()
+    output_group.add_argument(
+        "--json",
+        action="store_true",
+        help="Output machine-readable JSON metadata",
+    )
+    output_group.add_argument(
+        "--toml",
+        action="store_true",
+        help="Output machine-readable TOML metadata",
     )
     gen_parser.add_argument(
         "--preset",
@@ -742,11 +857,6 @@ def _add_generate_command(subparsers) -> None:
         help="Do not write an output file (useful with --play)",
     )
     gen_parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Output machine-readable JSON metadata",
-    )
-    gen_parser.add_argument(
         "--jsonl",
         action="store_true",
         help="Output newline-delimited JSON (useful with --count)",
@@ -814,10 +924,16 @@ def _add_sfx_command(subparsers) -> None:
         action="store_true",
         help="Alias for --dry-run that also enables JSON output (for agents)",
     )
-    sfx_parser.add_argument(
+    output_group = sfx_parser.add_mutually_exclusive_group()
+    output_group.add_argument(
         "--json",
         action="store_true",
         help="Output machine-readable JSON metadata",
+    )
+    output_group.add_argument(
+        "--toml",
+        action="store_true",
+        help="Output machine-readable TOML metadata",
     )
     sfx_parser.add_argument(
         "--metadata",
@@ -834,10 +950,16 @@ def _add_list_command(subparsers) -> None:
         help="List available presets and options",
         description="Display available presets, effects, and sound effect types.",
     )
-    list_parser.add_argument(
+    output_group = list_parser.add_mutually_exclusive_group()
+    output_group.add_argument(
         "--json",
         action="store_true",
         help="Output machine-readable JSON",
+    )
+    output_group.add_argument(
+        "--toml",
+        action="store_true",
+        help="Output machine-readable TOML",
     )
     list_parser.add_argument(
         "category",
@@ -876,6 +998,11 @@ def _add_schema_command(subparsers) -> None:
         default="all",
         help="Which schema to print (default: all)",
     )
+    schema_parser.add_argument(
+        "--toml",
+        action="store_true",
+        help="Output schema as TOML (lossless, but JSON is the native format)",
+    )
     schema_parser.set_defaults(func=cmd_schema)
 
 
@@ -885,7 +1012,9 @@ def _add_doctor_command(subparsers) -> None:
         help="Check environment and optional dependencies",
         description="Print diagnostics about installed dependencies and optional features.",
     )
-    doctor_parser.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+    output_group = doctor_parser.add_mutually_exclusive_group()
+    output_group.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+    output_group.add_argument("--toml", action="store_true", help="Output machine-readable TOML")
     doctor_parser.set_defaults(func=cmd_doctor)
 
 
@@ -932,9 +1061,12 @@ def create_parser() -> argparse.ArgumentParser:
 def _prepare_generate_args(args: Namespace) -> None:
     if args.plan:
         args.dry_run = True
-        args.json = True
+        if not getattr(args, "toml", False) and not getattr(args, "json", False) and not args.jsonl:
+            args.json = True
     if args.jsonl:
         args.json = True
+    if getattr(args, "toml", False) and args.jsonl:
+        raise ValueError("Use only one of --jsonl or --toml")
     if args.count < 1:
         raise ValueError("--count must be >= 1")
     if args.count > 1 and args.play:
@@ -1081,6 +1213,8 @@ def _emit_generate_payloads(
     if args.jsonl:
         for payload in payloads:
             print(json.dumps(payload, separators=(",", ":")))
+    elif getattr(args, "toml", False):
+        print(_toml_dump(payloads[0] if len(payloads) == 1 else payloads, array_key="runs"), end="")
     elif args.json:
         print(json.dumps(payloads[0] if len(payloads) == 1 else payloads, indent=2))
     else:
@@ -1093,6 +1227,12 @@ def _emit_generate_payloads(
     if getattr(args, "metadata", None):
         if args.jsonl:
             _write_metadata_jsonl(args.metadata, payloads)
+        elif args.metadata.suffix.lower() == ".toml":
+            _ensure_parent_dir(args.metadata)
+            args.metadata.write_text(
+                _toml_dump(payloads[0] if len(payloads) == 1 else payloads, array_key="runs"),
+                encoding="utf-8",
+            )
         else:
             _write_metadata(args.metadata, payloads[0] if len(payloads) == 1 else payloads)
 
@@ -1101,7 +1241,7 @@ def cmd_generate(args: Namespace) -> int:
     """Execute the generate command."""
     _prepare_generate_args(args)
     seed, user_provided_seed = _resolve_seed(args)
-    if user_provided_seed or args.json:
+    if user_provided_seed or args.json or getattr(args, "toml", False):
         print(f"Seed: {seed}", file=sys.stderr)
     _format_was_explicit, resolved_format, output_path = _resolve_generate_output_base(
         args, seed=seed
@@ -1138,7 +1278,8 @@ def cmd_sfx(args: Namespace) -> int:
 
     if args.plan:
         args.dry_run = True
-        args.json = True
+        if not getattr(args, "toml", False) and not getattr(args, "json", False):
+            args.json = True
 
     sfx = SFXGenerator()
 
@@ -1166,7 +1307,9 @@ def cmd_sfx(args: Namespace) -> int:
             tempo=sfx.tempo,
             notes=notes,
         )
-        if args.json:
+        if getattr(args, "toml", False):
+            print(_toml_dump(payload), end="")
+        elif getattr(args, "json", False):
             print(json.dumps(payload, indent=2))
         else:
             print(f"Would export {args.type} SFX ({resolved_format.upper()}) to: {output_path}")
@@ -1192,6 +1335,18 @@ def cmd_list(args: Namespace) -> int:
             payload["sfx"] = _as_json_items(SFX_ITEMS)
 
         print(json.dumps(payload, indent=2))
+        return 0
+
+    if getattr(args, "toml", False):
+        payload: dict[str, object] = {"program": "chiptune", "version": get_version(), "schema": 1}
+        if category in ("presets", "all"):
+            payload["presets"] = _as_json_items(GENRE_PRESET_ITEMS)
+        if category in ("effects", "all"):
+            payload["effects"] = _as_json_items(EFFECT_PRESET_ITEMS)
+        if category in ("sfx", "all"):
+            payload["sfx"] = _as_json_items(SFX_ITEMS)
+
+        print(_toml_dump(payload), end="")
         return 0
 
     if category in ("presets", "all"):
@@ -1237,11 +1392,11 @@ _chiptune_complete() {{
   fi
 
   local subcommand="${{COMP_WORDS[1]}}"
-  case "$subcommand" in
+    case "$subcommand" in
     generate)
       local opts="--preset -p --output -o --output-template --bars -b --count --root -r --bpm \\
 --effects -e --no-drums --no-bass --no-counter --seed -s --format -f \\
---play --no-save --json --jsonl --dry-run --plan --metadata"
+--play --no-save --json --toml --jsonl --dry-run --plan --metadata"
       if [[ "$prev" == "--preset" || "$prev" == "-p" ]]; then
         COMPREPLY=( $(compgen -W "{presets}" -- "$cur") )
         return 0
@@ -1258,7 +1413,7 @@ _chiptune_complete() {{
       return 0
       ;;
     sfx)
-      local opts="--output -o --format --play --no-save --dry-run --plan --json --metadata"
+      local opts="--output -o --format --play --no-save --dry-run --plan --json --toml --metadata"
       if [[ $COMP_CWORD -eq 2 ]]; then
         COMPREPLY=( $(compgen -W "{sfx}" -- "$cur") )
         return 0
@@ -1271,7 +1426,7 @@ _chiptune_complete() {{
       return 0
       ;;
     list)
-      local opts="--json"
+      local opts="--json --toml"
       if [[ $COMP_CWORD -eq 2 ]]; then
         COMPREPLY=( $(compgen -W "presets effects sfx all $opts" -- "$cur") )
         return 0
@@ -1290,9 +1445,12 @@ _chiptune_complete() {{
         COMPREPLY=( $(compgen -W "all generate sfx list doctor" -- "$cur") )
         return 0
       fi
+      local opts="--toml"
+      COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+      return 0
       ;;
     doctor)
-      local opts="--json"
+      local opts="--json --toml"
       COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
       return 0
       ;;
@@ -1508,9 +1666,15 @@ def cmd_schema(args: Namespace) -> int:
             "dialect": _json_schema_dialect(),
             "schemas": schemas,
         }
+        if getattr(args, "toml", False):
+            print(_toml_dump(payload), end="")
+            return 0
         print(json.dumps(payload, indent=2))
         return 0
 
+    if getattr(args, "toml", False):
+        print(_toml_dump(schemas[args.target]), end="")
+        return 0
     print(json.dumps(schemas[args.target], indent=2))
     return 0
 
@@ -1547,6 +1711,9 @@ def cmd_doctor(args: Namespace) -> int:
 
     if args.json:
         print(json.dumps(payload, indent=2))
+        return 0
+    if getattr(args, "toml", False):
+        print(_toml_dump(payload), end="")
         return 0
 
     print("chiptune doctor")

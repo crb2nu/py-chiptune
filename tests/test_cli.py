@@ -27,6 +27,20 @@ class TestCLI:
         assert any(item["name"] == "toon" for item in payload["effects"])
         assert any(item["name"] == "coin" for item in payload["sfx"])
 
+    def test_list_toml_all(self, capsys) -> None:
+        import tomllib
+
+        from chiptune.cli import main
+
+        exit_code = main(["list", "--toml"])
+        assert exit_code == 0
+
+        stdout = capsys.readouterr().out
+        payload = tomllib.loads(stdout)
+        assert payload["program"] == "chiptune"
+        assert payload["schema"] == 1
+        assert any(item["name"] == "toon" for item in payload["presets"])
+
     def test_list_json_presets_only(self, capsys) -> None:
         from chiptune.cli import main
 
@@ -134,6 +148,19 @@ class TestCLI:
         assert payload["output"] is None
         assert payload["artifact"] is None
 
+    def test_sfx_toml_no_save(self, capsys) -> None:
+        import tomllib
+
+        from chiptune.cli import main
+
+        exit_code = main(["sfx", "coin", "--toml", "--format", "midi", "--no-save"])
+        assert exit_code == 0
+
+        stdout = capsys.readouterr().out
+        payload = tomllib.loads(stdout)
+        assert payload["command"] == "sfx"
+        assert payload["saved"] is False
+
     def test_schema_generate(self, capsys) -> None:
         from chiptune.cli import main
 
@@ -157,6 +184,19 @@ class TestCLI:
         payloads = [json.loads(line) for line in lines]
         assert all(p["command"] == "generate" for p in payloads)
         assert payloads[0]["seed"] != payloads[1]["seed"]
+
+    def test_generate_toml_batch(self, capsys) -> None:
+        import tomllib
+
+        from chiptune.cli import main
+
+        exit_code = main(["generate", "--count", "2", "--toml", "--format", "midi", "--no-save"])
+        assert exit_code == 0
+
+        stdout = capsys.readouterr().out
+        payload = tomllib.loads(stdout)
+        assert len(payload["runs"]) == 2
+        assert payload["runs"][0]["command"] == "generate"
 
     def test_generate_plan_batch_outputs(self, tmp_path, capsys) -> None:
         from chiptune.cli import main
