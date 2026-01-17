@@ -31,6 +31,7 @@ GENRE_PRESET_METHODS: dict[str, str] = {
     "battle": "battle_theme",
     "overworld": "overworld",
     "dungeon": "dungeon",
+    "toon": "toon_theme",
     "victory": "victory_fanfare",
     "title": "title_screen",
     "shop": "shop_theme",
@@ -42,6 +43,7 @@ GENRE_PRESET_ITEMS: list[tuple[str, str]] = [
     ("battle", "Intense battle/boss fight music (A minor, 165 BPM)"),
     ("overworld", "Adventurous exploration theme (C major, 120 BPM)"),
     ("dungeon", "Dark, mysterious atmosphere (E dorian, 85 BPM)"),
+    ("toon", "Cartoon bouncy theme (C mixolydian, 150 BPM)"),
     ("victory", "Short victory fanfare (C lydian, 140 BPM)"),
     ("title", "Catchy title screen music (F major, 130 BPM)"),
     ("shop", "Cheerful shop/menu music (G mixolydian, 115 BPM)"),
@@ -58,6 +60,7 @@ EFFECT_PRESET_METHODS: dict[str, str] = {
     "dreamy": "dreamy",
     "dungeon": "dungeon_reverb",
     "boss": "boss_battle",
+    "toon": "toon_cartoon",
 }
 
 EFFECT_PRESET_ITEMS: list[tuple[str, str]] = [
@@ -69,6 +72,7 @@ EFFECT_PRESET_ITEMS: list[tuple[str, str]] = [
     ("dreamy", "Ethereal floating feel (heavy effects)"),
     ("dungeon", "Cavernous reverb atmosphere"),
     ("boss", "Punchy minimal effects for clarity"),
+    ("toon", "Cartoon wobble + slapback"),
 ]
 
 SFX_METHODS: dict[str, str] = {
@@ -153,9 +157,15 @@ def _ensure_parent_dir(path: Path) -> None:
         parent.mkdir(parents=True, exist_ok=True)
 
 
-def _write_metadata(path: Path, payload: dict[str, object]) -> None:
+def _write_metadata(path: Path, payload: object) -> None:
     _ensure_parent_dir(path)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def _write_metadata_jsonl(path: Path, payloads: list[dict[str, object]]) -> None:
+    _ensure_parent_dir(path)
+    lines = [json.dumps(payload, separators=(",", ":")) for payload in payloads]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _file_artifact(path: Path) -> dict[str, object]:
@@ -318,6 +328,12 @@ def _resolve_seed(args: Namespace) -> tuple[int, bool]:
     return seed, user_provided_seed
 
 
+def _batch_output_path(base: Path, index: int) -> Path:
+    if base.suffix:
+        return base.with_name(f"{base.stem}-{index:03d}{base.suffix}")
+    return base.with_name(f"{base.name}-{index:03d}")
+
+
 def _maybe_render_audio(track, args: Namespace, *, resolved_format: str):
     needs_audio = args.play or (not args.no_save and resolved_format == "wav")
     if not needs_audio:
@@ -345,16 +361,7 @@ def _maybe_render_audio(track, args: Namespace, *, resolved_format: str):
     return effects, rendered_audio
 
 
-def _finalize_generate(
-    track,
-    args: Namespace,
-    *,
-    seed: int,
-    resolved_format: str,
-    output_path: Path,
-    effects,
-    rendered_audio,
-) -> int:
+def _track_payload_base(track) -> dict[str, object]:
     try:
         duration_seconds = float(track.duration_seconds())
     except Exception:
@@ -367,7 +374,7 @@ def _finalize_generate(
         raw_mode = getattr(key, "mode", None)
         key_mode = getattr(raw_mode, "value", raw_mode) if raw_mode is not None else "unknown"
 
-    payload_base = {
+    return {
         "track_name": getattr(track, "name", "unknown"),
         "track_bpm": int(getattr(track, "bpm", 0)),
         "track_time_signature": tuple(getattr(track, "time_signature", (4, 4))),
@@ -376,6 +383,19 @@ def _finalize_generate(
         "track_length_beats": float(getattr(track, "length_beats", 0.0)),
         "track_duration_seconds": duration_seconds,
     }
+
+
+def _finalize_generate(
+    track,
+    args: Namespace,
+    *,
+    seed: int,
+    resolved_format: str,
+    output_path: Path,
+    effects,
+    rendered_audio,
+) -> int:
+    payload_base = _track_payload_base(track)
     if args.no_save:
         if args.json:
             payload = _generate_json_payload(
@@ -622,36 +642,7 @@ def _handle_sfx_wav(args: Namespace, *, sfx, kind: str, output_path: Path) -> in
     return 0
 
 
-def create_parser() -> argparse.ArgumentParser:
-    """Create the argument parser."""
-    parser = argparse.ArgumentParser(
-        prog="chiptune",
-        description="Generate retro 8-bit/16-bit style music and sound effects.",
-        epilog=(
-            "Examples:\n"
-            "  chiptune generate --preset battle --output battle.wav\n"
-            "  chiptune generate --preset overworld --format midi --output overworld.mid\n"
-            "  chiptune generate --preset battle --play --no-save\n"
-            "  chiptune sfx coin --output coin.mid\n"
-            "  chiptune list all\n"
-            "  chiptune list --json\n"
-        ),
-        formatter_class=_ChiptuneHelpFormatter,
-    )
-    parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {get_version()}",
-    )
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Show full exception tracebacks on errors",
-    )
-
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
-
-    # Generate command
+def _add_generate_command(subparsers) -> None:
     gen_parser = subparsers.add_parser(
         "generate",
         help="Generate chiptune music",
@@ -672,11 +663,25 @@ def create_parser() -> argparse.ArgumentParser:
         help="Output file path (default: output.wav / output.mid)",
     )
     gen_parser.add_argument(
+        "--output-template",
+        default=None,
+        help=(
+            "Output path template for batch runs (supports {i}, {seed}, {preset}, "
+            "{format}, {ext}). Example: out/{preset}-{i:03d}-{seed}.{ext}"
+        ),
+    )
+    gen_parser.add_argument(
         "--bars",
         "-b",
         type=int,
         default=8,
         help="Length in bars",
+    )
+    gen_parser.add_argument(
+        "--count",
+        type=int,
+        default=1,
+        help="Number of tracks to generate (batch mode)",
     )
     gen_parser.add_argument(
         "--root",
@@ -742,6 +747,21 @@ def create_parser() -> argparse.ArgumentParser:
         help="Output machine-readable JSON metadata",
     )
     gen_parser.add_argument(
+        "--jsonl",
+        action="store_true",
+        help="Output newline-delimited JSON (useful with --count)",
+    )
+    gen_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Do not write output or play audio; still resolve paths and emit metadata",
+    )
+    gen_parser.add_argument(
+        "--plan",
+        action="store_true",
+        help="Alias for --dry-run that also enables JSON output (for agents)",
+    )
+    gen_parser.add_argument(
         "--metadata",
         type=Path,
         default=None,
@@ -749,7 +769,8 @@ def create_parser() -> argparse.ArgumentParser:
     )
     gen_parser.set_defaults(func=cmd_generate)
 
-    # SFX command
+
+def _add_sfx_command(subparsers) -> None:
     sfx_parser = subparsers.add_parser(
         "sfx",
         help="Generate sound effects",
@@ -784,6 +805,16 @@ def create_parser() -> argparse.ArgumentParser:
         help="Do not write an output file",
     )
     sfx_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Do not write output or play audio; still resolve paths and emit metadata",
+    )
+    sfx_parser.add_argument(
+        "--plan",
+        action="store_true",
+        help="Alias for --dry-run that also enables JSON output (for agents)",
+    )
+    sfx_parser.add_argument(
         "--json",
         action="store_true",
         help="Output machine-readable JSON metadata",
@@ -796,7 +827,8 @@ def create_parser() -> argparse.ArgumentParser:
     )
     sfx_parser.set_defaults(func=cmd_sfx)
 
-    # List command
+
+def _add_list_command(subparsers) -> None:
     list_parser = subparsers.add_parser(
         "list",
         help="List available presets and options",
@@ -816,7 +848,8 @@ def create_parser() -> argparse.ArgumentParser:
     )
     list_parser.set_defaults(func=cmd_list)
 
-    # Completion command
+
+def _add_completion_command(subparsers) -> None:
     completion_parser = subparsers.add_parser(
         "completion",
         help="Generate shell completion scripts",
@@ -829,6 +862,24 @@ def create_parser() -> argparse.ArgumentParser:
     )
     completion_parser.set_defaults(func=cmd_completion)
 
+
+def _add_schema_command(subparsers) -> None:
+    schema_parser = subparsers.add_parser(
+        "schema",
+        help="Print JSON Schema for machine-readable outputs",
+        description="Print JSON Schema for `--json`/`--jsonl` payloads.",
+    )
+    schema_parser.add_argument(
+        "target",
+        nargs="?",
+        choices=["all", "generate", "sfx", "list", "doctor"],
+        default="all",
+        help="Which schema to print (default: all)",
+    )
+    schema_parser.set_defaults(func=cmd_schema)
+
+
+def _add_doctor_command(subparsers) -> None:
     doctor_parser = subparsers.add_parser(
         "doctor",
         help="Check environment and optional dependencies",
@@ -837,39 +888,257 @@ def create_parser() -> argparse.ArgumentParser:
     doctor_parser.add_argument("--json", action="store_true", help="Output machine-readable JSON")
     doctor_parser.set_defaults(func=cmd_doctor)
 
+
+def create_parser() -> argparse.ArgumentParser:
+    """Create the argument parser."""
+    parser = argparse.ArgumentParser(
+        prog="chiptune",
+        description="Generate retro 8-bit/16-bit style music and sound effects.",
+        epilog=(
+            "Examples:\n"
+            "  chiptune generate --preset battle --output battle.wav\n"
+            "  chiptune generate --preset overworld --format midi --output overworld.mid\n"
+            "  chiptune generate --preset battle --play --no-save\n"
+            "  chiptune sfx coin --output coin.mid\n"
+            "  chiptune list all\n"
+            "  chiptune list --json\n"
+            "  chiptune schema generate\n"
+            "  chiptune doctor --json\n"
+        ),
+        formatter_class=_ChiptuneHelpFormatter,
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {get_version()}",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Show full exception tracebacks on errors",
+    )
+
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    _add_generate_command(subparsers)
+    _add_sfx_command(subparsers)
+    _add_list_command(subparsers)
+    _add_completion_command(subparsers)
+    _add_schema_command(subparsers)
+    _add_doctor_command(subparsers)
+
     return parser
 
 
-def cmd_generate(args: Namespace) -> int:
-    """Execute the generate command."""
-    seed, user_provided_seed = _resolve_seed(args)
-    if user_provided_seed or args.json:
-        print(f"Seed: {seed}", file=sys.stderr)
+def _prepare_generate_args(args: Namespace) -> None:
+    if args.plan:
+        args.dry_run = True
+        args.json = True
+    if args.jsonl:
+        args.json = True
+    if args.count < 1:
+        raise ValueError("--count must be >= 1")
+    if args.count > 1 and args.play:
+        raise ValueError("--play is not supported with --count > 1")
+    if args.dry_run and args.play:
+        raise ValueError("--play is not supported with --dry-run/--plan")
 
+
+def _format_ext(resolved_format: str) -> str:
+    return "mid" if resolved_format == "midi" else "wav"
+
+
+def _output_path_from_template(
+    template: str, *, index: int, seed: int, preset: str, resolved_format: str
+) -> Path:
+    ext = _format_ext(resolved_format)
+    output_str = template.format(i=index, seed=seed, preset=preset, format=resolved_format, ext=ext)
+    output_path = Path(output_str)
+    if output_path.suffix == "":
+        output_path = output_path.with_suffix(f".{ext}")
+    return output_path
+
+
+def _resolve_generate_output_base(args: Namespace, *, seed: int) -> tuple[bool, str, Path]:
     format_was_explicit, resolved_format, output_path = _resolve_generate_output(
         args.format, args.output
     )
     _check_format_output_conflict(format_was_explicit, args.output, resolved_format)
 
-    if not args.no_save:
-        _ensure_parent_dir(output_path)
+    if args.output_template is None:
+        return format_was_explicit, resolved_format, output_path
 
+    output_path = _output_path_from_template(
+        args.output_template,
+        index=0,
+        seed=seed,
+        preset=args.preset,
+        resolved_format=resolved_format,
+    )
+    _check_format_output_conflict(format_was_explicit, output_path, resolved_format)
+    return format_was_explicit, resolved_format, output_path
+
+
+def _generate_one_payload(
+    args: Namespace, *, seed: int, resolved_format: str, output_path: Path
+) -> dict[str, object]:
     track = _build_track(args)
+    payload_base = _track_payload_base(track)
+
+    if args.dry_run:
+        return _generate_json_payload(
+            args,
+            seed=seed,
+            resolved_format=resolved_format,
+            output=str(output_path),
+            saved=False,
+            played=False,
+            artifact=None,
+            **payload_base,
+        )
+
     effects, rendered_audio = _maybe_render_audio(track, args, resolved_format=resolved_format)
-    return _finalize_generate(
-        track,
+    played = bool(args.play)
+
+    if args.no_save:
+        return _generate_json_payload(
+            args,
+            seed=seed,
+            resolved_format=resolved_format,
+            output=None,
+            saved=False,
+            played=played,
+            artifact=None,
+            **payload_base,
+        )
+
+    _ensure_parent_dir(output_path)
+    if resolved_format == "midi":
+        from chiptune.output.midi import MidiExporter
+
+        MidiExporter().export_file(track, str(output_path))
+    else:
+        from chiptune.output.audio import AudioExporter
+
+        exporter = AudioExporter()
+        if rendered_audio is not None:
+            import soundfile as sf
+
+            sf.write(str(output_path), rendered_audio, exporter.sample_rate, subtype="PCM_16")
+        else:
+            exporter.export_wav(track, str(output_path), effects=effects)
+
+    artifact = _file_artifact(output_path)
+    return _generate_json_payload(
+        args,
+        seed=seed,
+        resolved_format=resolved_format,
+        output=str(output_path),
+        saved=True,
+        played=played,
+        artifact=artifact,
+        **payload_base,
+    )
+
+
+def _generate_payloads(
+    args: Namespace, *, seed: int, resolved_format: str, output_path: Path
+) -> list[dict[str, object]]:
+    import random
+
+    payloads: list[dict[str, object]] = []
+    for index in range(args.count):
+        run_seed = seed + index
+        random.seed(run_seed)
+
+        if args.output_template is not None:
+            run_output_path = _output_path_from_template(
+                args.output_template,
+                index=index,
+                seed=run_seed,
+                preset=args.preset,
+                resolved_format=resolved_format,
+            )
+        else:
+            run_output_path = (
+                output_path if args.count == 1 else _batch_output_path(output_path, index)
+            )
+
+        payloads.append(
+            _generate_one_payload(
+                args,
+                seed=run_seed,
+                resolved_format=resolved_format,
+                output_path=run_output_path,
+            )
+        )
+
+    return payloads
+
+
+def _emit_generate_payloads(
+    args: Namespace, *, payloads: list[dict[str, object]], resolved_format: str
+) -> None:
+    if args.jsonl:
+        for payload in payloads:
+            print(json.dumps(payload, separators=(",", ":")))
+    elif args.json:
+        print(json.dumps(payloads[0] if len(payloads) == 1 else payloads, indent=2))
+    else:
+        for payload in payloads:
+            out = payload.get("output")
+            fmt = payload.get("format", resolved_format)
+            if out:
+                print(f"Exported {fmt} to: {out}")
+
+    if getattr(args, "metadata", None):
+        if args.jsonl:
+            _write_metadata_jsonl(args.metadata, payloads)
+        else:
+            _write_metadata(args.metadata, payloads[0] if len(payloads) == 1 else payloads)
+
+
+def cmd_generate(args: Namespace) -> int:
+    """Execute the generate command."""
+    _prepare_generate_args(args)
+    seed, user_provided_seed = _resolve_seed(args)
+    if user_provided_seed or args.json:
+        print(f"Seed: {seed}", file=sys.stderr)
+    _format_was_explicit, resolved_format, output_path = _resolve_generate_output_base(
+        args, seed=seed
+    )
+
+    if args.count == 1 and not args.jsonl and not args.dry_run:
+        if not args.no_save:
+            _ensure_parent_dir(output_path)
+        track = _build_track(args)
+        effects, rendered_audio = _maybe_render_audio(track, args, resolved_format=resolved_format)
+        return _finalize_generate(
+            track,
+            args,
+            seed=seed,
+            resolved_format=resolved_format,
+            output_path=output_path,
+            effects=effects,
+            rendered_audio=rendered_audio,
+        )
+
+    payloads = _generate_payloads(
         args,
         seed=seed,
         resolved_format=resolved_format,
         output_path=output_path,
-        effects=effects,
-        rendered_audio=rendered_audio,
     )
+    _emit_generate_payloads(args, payloads=payloads, resolved_format=resolved_format)
+    return 0
 
 
 def cmd_sfx(args: Namespace) -> int:
     """Execute the sfx command."""
     from chiptune.sfx.effects import SFXGenerator
+
+    if args.plan:
+        args.dry_run = True
+        args.json = True
 
     sfx = SFXGenerator()
 
@@ -880,8 +1149,30 @@ def cmd_sfx(args: Namespace) -> int:
 
     if args.play and resolved_format != "wav":
         raise ValueError("--play is only supported with --format wav")
+    if args.dry_run and args.play:
+        raise ValueError("--play is not supported with --dry-run/--plan")
 
     method_name = SFX_METHODS[args.type]
+    if args.dry_run:
+        notes = sfx.notes(method_name)
+        payload = _sfx_metadata_payload(
+            args,
+            kind=method_name,
+            resolved_format=resolved_format,
+            output=str(output_path),
+            saved=False,
+            played=False,
+            artifact=None,
+            tempo=sfx.tempo,
+            notes=notes,
+        )
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(f"Would export {args.type} SFX ({resolved_format.upper()}) to: {output_path}")
+        _emit_sfx_metadata(args, payload)
+        return 0
+
     if resolved_format == "midi":
         return _handle_sfx_midi(args, sfx=sfx, kind=method_name, output_path=output_path)
     return _handle_sfx_wav(args, sfx=sfx, kind=method_name, output_path=output_path)
@@ -916,7 +1207,7 @@ def cmd_list(args: Namespace) -> int:
             print(f"  {name:12} {desc}")
 
     if category in ("sfx", "all"):
-        print("\nSound Effects (outputs MIDI):")
+        print("\nSound Effects (MIDI or WAV):")
         print("-" * 40)
         for name, desc in SFX_ITEMS:
             print(f"  {name:14} {desc}")
@@ -937,7 +1228,7 @@ _chiptune_complete() {{
   cur="${{COMP_WORDS[COMP_CWORD]}}"
   prev="${{COMP_WORDS[COMP_CWORD-1]}}"
 
-  local commands="generate sfx list completion"
+  local commands="generate sfx list completion schema doctor"
   local global_opts="--help -h --version --debug"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
@@ -948,9 +1239,9 @@ _chiptune_complete() {{
   local subcommand="${{COMP_WORDS[1]}}"
   case "$subcommand" in
     generate)
-      local opts="--preset -p --output -o --bars -b --root -r --bpm \\
+      local opts="--preset -p --output -o --output-template --bars -b --count --root -r --bpm \\
 --effects -e --no-drums --no-bass --no-counter --seed -s --format -f \\
---play --no-save --json"
+--play --no-save --json --jsonl --dry-run --plan --metadata"
       if [[ "$prev" == "--preset" || "$prev" == "-p" ]]; then
         COMPREPLY=( $(compgen -W "{presets}" -- "$cur") )
         return 0
@@ -967,7 +1258,7 @@ _chiptune_complete() {{
       return 0
       ;;
     sfx)
-      local opts="--output -o --format --play --no-save"
+      local opts="--output -o --format --play --no-save --dry-run --plan --json --metadata"
       if [[ $COMP_CWORD -eq 2 ]]; then
         COMPREPLY=( $(compgen -W "{sfx}" -- "$cur") )
         return 0
@@ -994,6 +1285,17 @@ _chiptune_complete() {{
         return 0
       fi
       ;;
+    schema)
+      if [[ $COMP_CWORD -eq 2 ]]; then
+        COMPREPLY=( $(compgen -W "all generate sfx list doctor" -- "$cur") )
+        return 0
+      fi
+      ;;
+    doctor)
+      local opts="--json"
+      COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+      return 0
+      ;;
   esac
 }}
 
@@ -1011,6 +1313,205 @@ bashcompinit
 """ + bash_script
 
     print(zsh_script)
+    return 0
+
+
+def _json_schema_dialect() -> str:
+    return "https://json-schema.org/draft/2020-12/schema"
+
+
+def _artifact_json_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["path", "bytes", "sha256"],
+        "properties": {
+            "path": {"type": "string"},
+            "bytes": {"type": "integer", "minimum": 0},
+            "sha256": {"type": "string"},
+        },
+    }
+
+
+def _generate_payload_json_schema() -> dict[str, object]:
+    dialect = _json_schema_dialect()
+    artifact = _artifact_json_schema()
+    return {
+        "$schema": dialect,
+        "$id": "https://flexinfer.ai/schemas/chiptune/cli/v1/generate.json",
+        "title": "chiptune generate JSON payload",
+        "type": "object",
+        "additionalProperties": True,
+        "required": [
+            "program",
+            "version",
+            "schema",
+            "command",
+            "seed",
+            "format",
+            "saved",
+            "played",
+        ],
+        "properties": {
+            "program": {"const": "chiptune"},
+            "version": {"type": "string"},
+            "schema": {"const": 1},
+            "command": {"const": "generate"},
+            "preset": {"type": "string"},
+            "effects": {"type": "string"},
+            "bars": {"type": "integer", "minimum": 1},
+            "root": {"type": ["string", "null"]},
+            "bpm": {"type": ["integer", "null"]},
+            "seed": {"type": "integer"},
+            "format": {"enum": ["wav", "midi"]},
+            "output": {"type": ["string", "null"]},
+            "saved": {"type": "boolean"},
+            "played": {"type": "boolean"},
+            "artifact": {"anyOf": [{"type": "null"}, artifact]},
+            "track": {
+                "type": "object",
+                "additionalProperties": True,
+                "required": [
+                    "name",
+                    "bpm",
+                    "time_signature",
+                    "key_root",
+                    "key_mode",
+                    "length_beats",
+                    "duration_seconds",
+                ],
+                "properties": {
+                    "name": {"type": "string"},
+                    "bpm": {"type": "integer"},
+                    "time_signature": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "minItems": 2,
+                        "maxItems": 2,
+                    },
+                    "key_root": {"type": "string"},
+                    "key_mode": {"type": "string"},
+                    "length_beats": {"type": "number"},
+                    "duration_seconds": {"type": "number"},
+                },
+            },
+        },
+    }
+
+
+def _sfx_payload_json_schema() -> dict[str, object]:
+    dialect = _json_schema_dialect()
+    artifact = _artifact_json_schema()
+    return {
+        "$schema": dialect,
+        "$id": "https://flexinfer.ai/schemas/chiptune/cli/v1/sfx.json",
+        "title": "chiptune sfx JSON payload",
+        "type": "object",
+        "additionalProperties": True,
+        "required": [
+            "program",
+            "version",
+            "schema",
+            "command",
+            "type",
+            "kind",
+            "format",
+            "saved",
+            "played",
+        ],
+        "properties": {
+            "program": {"const": "chiptune"},
+            "version": {"type": "string"},
+            "schema": {"const": 1},
+            "command": {"const": "sfx"},
+            "type": {"type": "string"},
+            "kind": {"type": "string"},
+            "format": {"enum": ["wav", "midi"]},
+            "output": {"type": ["string", "null"]},
+            "saved": {"type": "boolean"},
+            "played": {"type": "boolean"},
+            "artifact": {"anyOf": [{"type": "null"}, artifact]},
+            "tempo": {"type": "integer"},
+            "duration_beats": {"type": "number"},
+            "duration_seconds": {"type": "number"},
+            "note_count": {"type": "integer", "minimum": 0},
+        },
+    }
+
+
+def _list_payload_json_schema() -> dict[str, object]:
+    dialect = _json_schema_dialect()
+    item = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["name", "description"],
+        "properties": {"name": {"type": "string"}, "description": {"type": "string"}},
+    }
+    return {
+        "$schema": dialect,
+        "$id": "https://flexinfer.ai/schemas/chiptune/cli/v1/list.json",
+        "title": "chiptune list JSON payload",
+        "type": "object",
+        "additionalProperties": True,
+        "required": ["program", "version", "schema"],
+        "properties": {
+            "program": {"const": "chiptune"},
+            "version": {"type": "string"},
+            "schema": {"const": 1},
+            "presets": {"type": "array", "items": item},
+            "effects": {"type": "array", "items": item},
+            "sfx": {"type": "array", "items": item},
+        },
+    }
+
+
+def _doctor_payload_json_schema() -> dict[str, object]:
+    dialect = _json_schema_dialect()
+    return {
+        "$schema": dialect,
+        "$id": "https://flexinfer.ai/schemas/chiptune/cli/v1/doctor.json",
+        "title": "chiptune doctor JSON payload",
+        "type": "object",
+        "additionalProperties": True,
+        "required": ["program", "version", "schema", "python", "modules"],
+        "properties": {
+            "program": {"const": "chiptune"},
+            "version": {"type": "string"},
+            "schema": {"const": 1},
+            "python": {
+                "type": "object",
+                "additionalProperties": True,
+                "required": ["version", "implementation", "platform"],
+                "properties": {
+                    "version": {"type": "string"},
+                    "implementation": {"type": "string"},
+                    "platform": {"type": "string"},
+                },
+            },
+            "modules": {"type": "object"},
+            "install": {"type": "object"},
+        },
+    }
+
+
+def cmd_schema(args: Namespace) -> int:
+    """Print JSON Schema documents for machine-readable CLI outputs."""
+    schemas: dict[str, dict[str, object]] = {
+        "generate": _generate_payload_json_schema(),
+        "sfx": _sfx_payload_json_schema(),
+        "list": _list_payload_json_schema(),
+        "doctor": _doctor_payload_json_schema(),
+    }
+
+    if args.target == "all":
+        payload: dict[str, object] = {
+            "dialect": _json_schema_dialect(),
+            "schemas": schemas,
+        }
+        print(json.dumps(payload, indent=2))
+        return 0
+
+    print(json.dumps(schemas[args.target], indent=2))
     return 0
 
 

@@ -52,6 +52,10 @@ chiptune generate --preset battle --play --no-save
 chiptune generate --preset battle --format midi --no-save --json
 chiptune generate --preset battle --format midi --no-save --metadata battle.json
 
+# Batch generation (for agents)
+chiptune generate --preset toon --count 5 --format midi --no-save --jsonl
+chiptune generate --preset toon --plan --count 3 --format midi --output out.mid
+
 # Generate a sound effect
 chiptune sfx coin --output coin.mid
 
@@ -66,6 +70,10 @@ chiptune list all
 
 # Machine-readable inventory (for agents)
 chiptune list --json
+
+# JSON Schema for `--json` payloads
+chiptune schema
+chiptune schema generate
 ```
 
 ### Shell completion
@@ -100,6 +108,7 @@ overworld = GenrePresets.overworld()       # C major, 120 BPM
 dungeon = GenrePresets.dungeon()           # E dorian, 85 BPM
 title = GenrePresets.title_screen()        # F major, 130 BPM
 chase = GenrePresets.chase_scene()         # E phrygian, 185 BPM
+toon = GenrePresets.toon_theme()           # C mixolydian, 150 BPM
 ```
 
 ### Using the Composer API

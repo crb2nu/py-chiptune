@@ -74,6 +74,26 @@ class GenrePresets:
         return composer
 
     @staticmethod
+    def toon_theme(root: str = "C") -> ChiptuneComposer:
+        """Cartoon/toon-style bouncy theme.
+
+        Features:
+        - Upbeat tempo (140-160 BPM)
+        - Mixolydian mode for playful color
+        - Bouncy, loop-friendly progression
+
+        Args:
+            root: Root note (default C)
+
+        Returns:
+            Configured ChiptuneComposer
+        """
+        composer = ChiptuneComposer.create(bpm=150, root=root, mode="mixolydian")
+        composer.set_progression(["I", "bVII", "IV", "V"])
+        composer.set_intensity("dramatic")
+        return composer
+
+    @staticmethod
     def dungeon(root: str = "E") -> ChiptuneComposer:
         """Dark, mysterious dungeon music.
 
@@ -325,6 +345,23 @@ class EffectPresets:
         return EffectChain(
             effects=[
                 Echo.short(),
+            ]
+        )
+
+    @staticmethod
+    def toon_cartoon() -> EffectChain:
+        """Cartoon/toon processing.
+
+        A slight pitch wobble plus slapback delay for a playful "toon" vibe.
+        """
+        from chiptune.output.audio.effects.chain import EffectChain
+        from chiptune.output.audio.effects.tape_delay import TapeDelay
+        from chiptune.output.audio.effects.vibrato import VibratoSample
+
+        return EffectChain(
+            effects=[
+                VibratoSample(rate=7.5, depth=0.002),
+                TapeDelay.slapback(),
             ]
         )
 

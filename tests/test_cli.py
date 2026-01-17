@@ -22,7 +22,9 @@ class TestCLI:
         assert "effects" in payload
         assert "sfx" in payload
         assert any(item["name"] == "battle" for item in payload["presets"])
+        assert any(item["name"] == "toon" for item in payload["presets"])
         assert any(item["name"] == "retro" for item in payload["effects"])
+        assert any(item["name"] == "toon" for item in payload["effects"])
         assert any(item["name"] == "coin" for item in payload["sfx"])
 
     def test_list_json_presets_only(self, capsys) -> None:
@@ -131,3 +133,43 @@ class TestCLI:
         assert payload["saved"] is False
         assert payload["output"] is None
         assert payload["artifact"] is None
+
+    def test_schema_generate(self, capsys) -> None:
+        from chiptune.cli import main
+
+        exit_code = main(["schema", "generate"])
+        assert exit_code == 0
+
+        stdout = capsys.readouterr().out.strip()
+        schema = json.loads(stdout)
+        assert schema["$schema"].startswith("https://json-schema.org/")
+        assert schema["$id"].endswith("/generate.json")
+
+    def test_generate_jsonl_batch(self, capsys) -> None:
+        from chiptune.cli import main
+
+        exit_code = main(["generate", "--count", "2", "--jsonl", "--format", "midi", "--no-save"])
+        assert exit_code == 0
+
+        stdout = capsys.readouterr().out.strip()
+        lines = stdout.splitlines()
+        assert len(lines) == 2
+        payloads = [json.loads(line) for line in lines]
+        assert all(p["command"] == "generate" for p in payloads)
+        assert payloads[0]["seed"] != payloads[1]["seed"]
+
+    def test_generate_plan_batch_outputs(self, tmp_path, capsys) -> None:
+        from chiptune.cli import main
+
+        output_path = tmp_path / "plan.mid"
+        exit_code = main(
+            ["generate", "--plan", "--count", "2", "--format", "midi", "--output", str(output_path)]
+        )
+        assert exit_code == 0
+
+        stdout = capsys.readouterr().out.strip()
+        payloads = json.loads(stdout)
+        assert isinstance(payloads, list)
+        assert payloads[0]["saved"] is False
+        assert payloads[0]["output"].endswith("plan-000.mid")
+        assert payloads[1]["output"].endswith("plan-001.mid")
