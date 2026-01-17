@@ -178,6 +178,29 @@ def _resolve_generate_output(format_opt: str | None, output: Path | None) -> tup
     return format_was_explicit, resolved_format, output_path
 
 
+def _resolve_sfx_output(
+    format_opt: str | None, output: Path | None, sfx_type: str
+) -> tuple[bool, str, Path]:
+    format_was_explicit = format_opt is not None
+    resolved_format = format_opt
+
+    if resolved_format is None:
+        inferred = _infer_format_from_path(output) if output is not None else None
+        resolved_format = inferred if inferred is not None else "midi"
+
+    if output is None:
+        output_path = (
+            Path(f"{sfx_type}.mid") if resolved_format == "midi" else Path(f"{sfx_type}.wav")
+        )
+    else:
+        output_path = output
+
+    if output_path.suffix == "":
+        output_path = output_path.with_suffix(".mid" if resolved_format == "midi" else ".wav")
+
+    return format_was_explicit, resolved_format, output_path
+
+
 def _build_track(args: Namespace):
     from chiptune.presets import GenrePresets
 
@@ -200,6 +223,142 @@ def _build_track(args: Namespace):
         composer.add_drums()
 
     return composer.build()
+
+
+def _generate_json_payload(
+    args: Namespace,
+    *,
+    seed: int,
+    resolved_format: str,
+    output: str | None,
+    saved: bool,
+    played: bool,
+) -> dict[str, object]:
+    return {
+        "program": "chiptune",
+        "version": get_version(),
+        "schema": 1,
+        "command": "generate",
+        "preset": args.preset,
+        "effects": args.effects,
+        "bars": args.bars,
+        "root": args.root,
+        "bpm": args.bpm,
+        "seed": seed,
+        "format": resolved_format,
+        "output": output,
+        "saved": saved,
+        "played": played,
+    }
+
+
+def _resolve_seed(args: Namespace) -> tuple[int, bool]:
+    import random
+
+    user_provided_seed = args.seed is not None
+    if args.seed is None:
+        seed = random.randrange(2**32)
+        args.seed = seed
+    else:
+        seed = args.seed
+
+    random.seed(seed)
+    return seed, user_provided_seed
+
+
+def _maybe_render_audio(track, args: Namespace, *, resolved_format: str):
+    needs_audio = args.play or (not args.no_save and resolved_format == "wav")
+    if not needs_audio:
+        return None, None
+
+    from chiptune.output.audio import AudioExporter, AudioPlayer
+    from chiptune.presets import EffectPresets
+
+    audio_exporter = AudioExporter()
+    effects = None
+    if args.effects:
+        effect_method = EFFECT_PRESET_METHODS[args.effects]
+        effects = getattr(EffectPresets, effect_method)()
+
+    rendered_audio = None
+    if args.play:
+        if not AudioPlayer.is_available():
+            raise ImportError(
+                "Audio playback requires optional dependencies. Install with: "
+                "pip install 'flexinfer-chiptune[audio]'"
+            )
+        rendered_audio = audio_exporter.render_track(track, effects=effects)
+        AudioPlayer().play(rendered_audio)
+
+    return effects, rendered_audio
+
+
+def _finalize_generate(
+    track,
+    args: Namespace,
+    *,
+    seed: int,
+    resolved_format: str,
+    output_path: Path,
+    effects,
+    rendered_audio,
+) -> int:
+    if args.no_save:
+        if args.json:
+            payload = _generate_json_payload(
+                args,
+                seed=seed,
+                resolved_format=resolved_format,
+                output=None,
+                saved=False,
+                played=bool(args.play),
+            )
+            print(json.dumps(payload, indent=2))
+        return 0
+
+    if resolved_format == "midi":
+        from chiptune.output.midi import MidiExporter
+
+        midi_exporter = MidiExporter()
+        midi_exporter.export_file(track, str(output_path))
+        if args.json:
+            payload = _generate_json_payload(
+                args,
+                seed=seed,
+                resolved_format=resolved_format,
+                output=str(output_path),
+                saved=True,
+                played=bool(args.play),
+            )
+            print(json.dumps(payload, indent=2))
+        else:
+            print(f"Exported MIDI to: {output_path}")
+        return 0
+
+    from chiptune.output.audio import AudioExporter
+
+    audio_exporter = AudioExporter()
+    if rendered_audio is not None:
+        import soundfile as sf
+
+        sf.write(str(output_path), rendered_audio, audio_exporter.sample_rate, subtype="PCM_16")
+    else:
+        audio_exporter.export_wav(track, str(output_path), effects=effects)
+
+    if args.json:
+        payload = _generate_json_payload(
+            args,
+            seed=seed,
+            resolved_format=resolved_format,
+            output=str(output_path),
+            saved=True,
+            played=bool(args.play),
+        )
+        print(json.dumps(payload, indent=2))
+    else:
+        print(f"Exported WAV to: {output_path}")
+
+    return 0
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -316,6 +475,11 @@ def create_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Do not write an output file (useful with --play)",
     )
+    gen_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output machine-readable JSON metadata",
+    )
     gen_parser.set_defaults(func=cmd_generate)
 
     # SFX command
@@ -334,7 +498,23 @@ def create_parser() -> argparse.ArgumentParser:
         "-o",
         type=Path,
         default=None,
-        help="Output file path (default: <type>.mid)",
+        help="Output file path (default: <type>.mid / <type>.wav)",
+    )
+    sfx_parser.add_argument(
+        "--format",
+        choices=["midi", "wav"],
+        default=None,
+        help="Output format (inferred from --output if omitted)",
+    )
+    sfx_parser.add_argument(
+        "--play",
+        action="store_true",
+        help="Play the sound effect (WAV only; requires optional 'audio' extras)",
+    )
+    sfx_parser.add_argument(
+        "--no-save",
+        action="store_true",
+        help="Do not write an output file",
     )
     sfx_parser.set_defaults(func=cmd_sfx)
 
@@ -358,22 +538,27 @@ def create_parser() -> argparse.ArgumentParser:
     )
     list_parser.set_defaults(func=cmd_list)
 
+    # Completion command
+    completion_parser = subparsers.add_parser(
+        "completion",
+        help="Generate shell completion scripts",
+        description="Print shell completion script for bash/zsh.",
+    )
+    completion_parser.add_argument(
+        "shell",
+        choices=["bash", "zsh"],
+        help="Shell type",
+    )
+    completion_parser.set_defaults(func=cmd_completion)
+
     return parser
 
 
 def cmd_generate(args: Namespace) -> int:
     """Execute the generate command."""
-    import random
-
-    seed: int
-    if args.seed is None:
-        seed = random.randrange(2**32)
-        args.seed = seed
-    else:
-        seed = args.seed
-
-    random.seed(seed)
-    print(f"Seed: {seed}", file=sys.stderr)
+    seed, user_provided_seed = _resolve_seed(args)
+    if user_provided_seed or args.json:
+        print(f"Seed: {seed}", file=sys.stderr)
 
     format_was_explicit, resolved_format, output_path = _resolve_generate_output(
         args.format, args.output
@@ -389,53 +574,16 @@ def cmd_generate(args: Namespace) -> int:
         _ensure_parent_dir(output_path)
 
     track = _build_track(args)
-
-    needs_audio = args.play or (not args.no_save and resolved_format == "wav")
-    effects = None
-    rendered_audio = None
-
-    if needs_audio:
-        from chiptune.output.audio import AudioExporter, AudioPlayer
-        from chiptune.presets import EffectPresets
-
-        audio_exporter = AudioExporter()
-        if args.effects:
-            effect_method = EFFECT_PRESET_METHODS[args.effects]
-            effects = getattr(EffectPresets, effect_method)()
-
-        if args.play:
-            if not AudioPlayer.is_available():
-                raise ImportError(
-                    "Audio playback requires optional dependencies. Install with: "
-                    "pip install 'flexinfer-chiptune[audio]'"
-                )
-            rendered_audio = audio_exporter.render_track(track, effects=effects)
-            AudioPlayer().play(rendered_audio)
-
-    if args.no_save:
-        return 0
-
-    if resolved_format == "midi":
-        from chiptune.output.midi import MidiExporter
-
-        midi_exporter = MidiExporter()
-        midi_exporter.export_file(track, str(output_path))
-        print(f"Exported MIDI to: {output_path}")
-        return 0
-
-    from chiptune.output.audio import AudioExporter
-
-    audio_exporter = AudioExporter()
-    if rendered_audio is not None:
-        import soundfile as sf
-
-        sf.write(str(output_path), rendered_audio, audio_exporter.sample_rate, subtype="PCM_16")
-    else:
-        audio_exporter.export_wav(track, str(output_path), effects=effects)
-
-    print(f"Exported WAV to: {output_path}")
-
-    return 0
+    effects, rendered_audio = _maybe_render_audio(track, args, resolved_format=resolved_format)
+    return _finalize_generate(
+        track,
+        args,
+        seed=seed,
+        resolved_format=resolved_format,
+        output_path=output_path,
+        effects=effects,
+        rendered_audio=rendered_audio,
+    )
 
 
 def cmd_sfx(args: Namespace) -> int:
@@ -444,25 +592,72 @@ def cmd_sfx(args: Namespace) -> int:
 
     sfx = SFXGenerator()
 
-    output_path: Path = args.output or Path(f"{args.type}.mid")
-    if output_path.suffix == "":
-        output_path = output_path.with_suffix(".mid")
+    format_was_explicit, resolved_format, output_path = _resolve_sfx_output(
+        args.format, args.output, args.type
+    )
 
-    if output_path.suffix.lower() not in {".mid", ".midi"}:
-        raise ValueError("SFX output is MIDI-only. Use a .mid/.midi file extension.")
+    if format_was_explicit and args.output is not None:
+        inferred = _infer_format_from_path(args.output)
+        if inferred is not None and inferred != resolved_format:
+            raise ValueError(
+                f"--format {resolved_format} conflicts with --output extension {args.output.suffix}"
+            )
 
-    _ensure_parent_dir(output_path)
+    if args.play and resolved_format != "wav":
+        raise ValueError("--play is only supported with --format wav")
 
     method_name = SFX_METHODS[args.type]
-    generator_method = getattr(sfx, method_name)
+    if resolved_format == "midi":
+        if output_path.suffix.lower() not in {".mid", ".midi"}:
+            raise ValueError("MIDI output requires a .mid/.midi file extension.")
 
-    # Generate MIDI bytes
-    midi_bytes = generator_method()
+        generator_method = getattr(sfx, method_name)
+        midi_bytes = generator_method()
 
-    # Save to file
-    sfx.save(midi_bytes, str(output_path))
+        if args.no_save:
+            return 0
 
-    print(f"Exported {args.type} SFX to: {output_path}")
+        _ensure_parent_dir(output_path)
+        sfx.save(midi_bytes, str(output_path))
+        print(f"Exported {args.type} SFX (MIDI) to: {output_path}")
+        return 0
+
+    if output_path.suffix.lower() != ".wav":
+        raise ValueError("WAV output requires a .wav file extension.")
+
+    notes = sfx.notes(method_name)
+
+    if args.play:
+        from chiptune.chip.channels import Channel
+        from chiptune.output.audio.exporter import AudioExporter
+        from chiptune.output.audio.playback import AudioPlayer
+
+        if not AudioPlayer.is_available():
+            raise ImportError(
+                "Audio playback requires optional dependencies. Install with: "
+                "pip install 'flexinfer-chiptune[audio]'"
+            )
+
+        import numpy as np
+
+        exporter = AudioExporter()
+        channel = Channel.pulse(channel_id=0)
+        channel.add_notes(notes)
+        mono = exporter.render_channel(channel, sfx.tempo)
+        stereo = np.column_stack([mono, mono]).astype(np.float32, copy=False)
+        AudioPlayer().play(stereo)
+
+    if args.no_save:
+        return 0
+
+    from chiptune.output.audio.exporter import AudioExporter
+
+    exporter = AudioExporter()
+    wav_bytes = exporter.export_sfx(notes, tempo=sfx.tempo)
+
+    _ensure_parent_dir(output_path)
+    output_path.write_bytes(wav_bytes)
+    print(f"Exported {args.type} SFX (WAV) to: {output_path}")
     return 0
 
 
@@ -501,6 +696,95 @@ def cmd_list(args: Namespace) -> int:
             print(f"  {name:14} {desc}")
 
     print()
+    return 0
+
+
+def cmd_completion(args: Namespace) -> int:
+    """Print shell completion scripts."""
+    presets = " ".join(name for name, _ in GENRE_PRESET_ITEMS)
+    effects = " ".join(name for name, _ in EFFECT_PRESET_ITEMS)
+    sfx = " ".join(name for name, _ in SFX_ITEMS)
+
+    bash_script = f"""# bash completion for chiptune
+_chiptune_complete() {{
+  local cur prev
+  cur="${{COMP_WORDS[COMP_CWORD]}}"
+  prev="${{COMP_WORDS[COMP_CWORD-1]}}"
+
+  local commands="generate sfx list completion"
+  local global_opts="--help -h --version --debug"
+
+  if [[ $COMP_CWORD -eq 1 ]]; then
+    COMPREPLY=( $(compgen -W "$commands $global_opts" -- "$cur") )
+    return 0
+  fi
+
+  local subcommand="${{COMP_WORDS[1]}}"
+  case "$subcommand" in
+    generate)
+      local opts="--preset -p --output -o --bars -b --root -r --bpm \\
+--effects -e --no-drums --no-bass --no-counter --seed -s --format -f \\
+--play --no-save --json"
+      if [[ "$prev" == "--preset" || "$prev" == "-p" ]]; then
+        COMPREPLY=( $(compgen -W "{presets}" -- "$cur") )
+        return 0
+      fi
+      if [[ "$prev" == "--effects" || "$prev" == "-e" ]]; then
+        COMPREPLY=( $(compgen -W "{effects}" -- "$cur") )
+        return 0
+      fi
+      if [[ "$prev" == "--format" || "$prev" == "-f" ]]; then
+        COMPREPLY=( $(compgen -W "wav midi" -- "$cur") )
+        return 0
+      fi
+      COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+      return 0
+      ;;
+    sfx)
+      local opts="--output -o --format --play --no-save"
+      if [[ $COMP_CWORD -eq 2 ]]; then
+        COMPREPLY=( $(compgen -W "{sfx}" -- "$cur") )
+        return 0
+      fi
+      if [[ "$prev" == "--format" ]]; then
+        COMPREPLY=( $(compgen -W "midi wav" -- "$cur") )
+        return 0
+      fi
+      COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+      return 0
+      ;;
+    list)
+      local opts="--json"
+      if [[ $COMP_CWORD -eq 2 ]]; then
+        COMPREPLY=( $(compgen -W "presets effects sfx all $opts" -- "$cur") )
+        return 0
+      fi
+      COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+      return 0
+      ;;
+    completion)
+      if [[ $COMP_CWORD -eq 2 ]]; then
+        COMPREPLY=( $(compgen -W "bash zsh" -- "$cur") )
+        return 0
+      fi
+      ;;
+  esac
+}}
+
+complete -F _chiptune_complete chiptune
+"""
+
+    if args.shell == "bash":
+        print(bash_script)
+        return 0
+
+    zsh_script = """#compdef chiptune
+autoload -Uz bashcompinit
+bashcompinit
+
+""" + bash_script
+
+    print(zsh_script)
     return 0
 
 

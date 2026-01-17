@@ -4,8 +4,11 @@ Provides NES-authentic waveform generation, ADSR envelopes,
 audio effects, and export to WAV/OGG formats.
 """
 
-# Effects - import subpackage
-from chiptune.output.audio import effects
+from __future__ import annotations
+
+import importlib
+from typing import Any
+
 from chiptune.output.audio.envelope import ADSREnvelope
 from chiptune.output.audio.exporter import AudioExporter
 from chiptune.output.audio.mixer import ChannelMixer
@@ -28,3 +31,11 @@ __all__ = [
     "midi_to_frequency",
     "effects",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "effects":
+        module = importlib.import_module("chiptune.output.audio.effects")
+        globals()[name] = module
+        return module
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

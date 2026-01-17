@@ -24,16 +24,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from chiptune.composer.composer import ChiptuneComposer
-from chiptune.output.audio.effects import (
-    Chorus,
-    Echo,
-    EffectChain,
-    TapeDelay,
-    Tremolo,
-)
 
 if TYPE_CHECKING:
     from chiptune.chip.systems import NES2A03
+    from chiptune.output.audio.effects.chain import EffectChain
 
 
 class GenrePresets:
@@ -204,6 +198,8 @@ class EffectPresets:
     @staticmethod
     def clean() -> EffectChain:
         """No effects - clean, dry signal."""
+        from chiptune.output.audio.effects.chain import EffectChain
+
         return EffectChain(effects=[])
 
     @staticmethod
@@ -213,6 +209,10 @@ class EffectPresets:
         Subtle chorus and short delay for depth
         without losing clarity.
         """
+        from chiptune.output.audio.effects.chain import EffectChain
+        from chiptune.output.audio.effects.chorus import Chorus
+        from chiptune.output.audio.effects.echo import Echo
+
         return EffectChain(
             effects=[
                 Chorus.subtle(),
@@ -227,6 +227,10 @@ class EffectPresets:
         Lush chorus and longer delay with
         more feedback for spacious feel.
         """
+        from chiptune.output.audio.effects.chain import EffectChain
+        from chiptune.output.audio.effects.chorus import Chorus
+        from chiptune.output.audio.effects.tape_delay import TapeDelay
+
         return EffectChain(
             effects=[
                 Chorus.lush(),
@@ -241,6 +245,10 @@ class EffectPresets:
         Tape-style delay with subtle tremolo
         for worn, nostalgic character.
         """
+        from chiptune.output.audio.effects.chain import EffectChain
+        from chiptune.output.audio.effects.tape_delay import TapeDelay
+        from chiptune.output.audio.effects.tremolo import Tremolo
+
         return EffectChain(
             effects=[
                 TapeDelay.lo_fi(),
@@ -255,6 +263,10 @@ class EffectPresets:
         Slight chorus for stereo width,
         slapback for presence.
         """
+        from chiptune.output.audio.effects.chain import EffectChain
+        from chiptune.output.audio.effects.chorus import Chorus
+        from chiptune.output.audio.effects.tape_delay import TapeDelay
+
         return EffectChain(
             effects=[
                 Chorus.subtle(),
@@ -269,6 +281,11 @@ class EffectPresets:
         Heavy chorus and long delay with
         tremolo for floating feel.
         """
+        from chiptune.output.audio.effects.chain import EffectChain
+        from chiptune.output.audio.effects.chorus import Chorus
+        from chiptune.output.audio.effects.tape_delay import TapeDelay
+        from chiptune.output.audio.effects.tremolo import Tremolo
+
         return EffectChain(
             effects=[
                 Chorus.lush(),
@@ -284,6 +301,10 @@ class EffectPresets:
         Long echo with high feedback
         simulates stone chambers.
         """
+        from chiptune.output.audio.effects.chain import EffectChain
+        from chiptune.output.audio.effects.echo import Echo
+        from chiptune.output.audio.effects.tremolo import Tremolo
+
         return EffectChain(
             effects=[
                 Echo.cavernous(),
@@ -298,6 +319,9 @@ class EffectPresets:
         Minimal effects for clarity and punch,
         just slight depth enhancement.
         """
+        from chiptune.output.audio.effects.chain import EffectChain
+        from chiptune.output.audio.effects.echo import Echo
+
         return EffectChain(
             effects=[
                 Echo.short(),
@@ -311,6 +335,10 @@ class EffectPresets:
         Filtered delay and slow modulation
         for submerged feel.
         """
+        from chiptune.output.audio.effects.chain import EffectChain
+        from chiptune.output.audio.effects.chorus import Chorus
+        from chiptune.output.audio.effects.tape_delay import TapeDelay
+
         return EffectChain(
             effects=[
                 Chorus(rate=0.3, depth=3.0, mix=0.4),

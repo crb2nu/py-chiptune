@@ -51,23 +51,32 @@ class SFXGenerator(BaseModel):
         exporter = MidiExporter()
         return exporter.export_sfx_bytes(notes, self.tempo)
 
+    def notes(self, kind: str) -> list[Note]:
+        """Return the note sequence for an SFX pattern.
+
+        Args:
+            kind: SFX kind/method name (e.g., "coin_collect", "jump")
+        """
+        builder = getattr(self, f"_notes_{kind}", None)
+        if builder is None:
+            raise ValueError(f"Unknown SFX kind: {kind}")
+        return builder()
+
+    def _notes_coin_collect(self) -> list[Note]:
+        return [
+            Note(pitch=67, duration=0.0625, velocity=110),  # G4
+            Note(pitch=72, duration=0.125, velocity=120),  # C5
+        ]
+
     def coin_collect(self) -> bytes:
         """Generate coin collection sound.
 
         Classic ascending two-note blip.
         """
-        notes = [
-            Note(pitch=67, duration=0.0625, velocity=110),  # G4
-            Note(pitch=72, duration=0.125, velocity=120),  # C5
-        ]
-        return self._to_midi(notes)
+        return self._to_midi(self._notes_coin_collect())
 
-    def jump(self) -> bytes:
-        """Generate jump sound.
-
-        Quick ascending pitch sweep.
-        """
-        notes = []
+    def _notes_jump(self) -> list[Note]:
+        notes: list[Note] = []
         start_pitch = 48
         for i in range(6):
             notes.append(
@@ -77,27 +86,31 @@ class SFXGenerator(BaseModel):
                     velocity=100 - i * 10,
                 )
             )
-        return self._to_midi(notes)
+        return notes
+
+    def jump(self) -> bytes:
+        """Generate jump sound.
+
+        Quick ascending pitch sweep.
+        """
+        return self._to_midi(self._notes_jump())
+
+    def _notes_land(self) -> list[Note]:
+        return [
+            Note(pitch=36, duration=0.0625, velocity=110),  # C2
+            Note(pitch=36, duration=0.0625, velocity=80),
+        ]
 
     def land(self) -> bytes:
         """Generate landing sound.
 
         Short low thud.
         """
-        notes = [
-            Note(pitch=36, duration=0.0625, velocity=110),  # C2
-            Note(pitch=36, duration=0.0625, velocity=80),
-        ]
-        return self._to_midi(notes)
+        return self._to_midi(self._notes_land())
 
-    def explosion(self) -> bytes:
-        """Generate explosion sound.
-
-        Descending noise sweep with decay.
-        """
-        notes = []
+    def _notes_explosion(self) -> list[Note]:
+        notes: list[Note] = []
         for i in range(8):
-            # Simulate noise with rapid low pitches
             pitch = 36 - i * 2
             notes.append(
                 Note(
@@ -106,26 +119,30 @@ class SFXGenerator(BaseModel):
                     velocity=max(40, 120 - i * 10),
                 )
             )
-        return self._to_midi(notes)
+        return notes
+
+    def explosion(self) -> bytes:
+        """Generate explosion sound.
+
+        Descending noise sweep with decay.
+        """
+        return self._to_midi(self._notes_explosion())
+
+    def _notes_damage(self) -> list[Note]:
+        return [
+            Note(pitch=64, duration=0.0625, velocity=120),  # E4
+            Note(pitch=60, duration=0.125, velocity=90),  # C4
+        ]
 
     def damage(self) -> bytes:
         """Generate damage/hurt sound.
 
         Quick dissonant burst.
         """
-        notes = [
-            Note(pitch=64, duration=0.0625, velocity=120),  # E4
-            Note(pitch=60, duration=0.125, velocity=90),  # C4
-        ]
-        return self._to_midi(notes)
+        return self._to_midi(self._notes_damage())
 
-    def powerup(self) -> bytes:
-        """Generate power-up sound.
-
-        Ascending chromatic run with triumphant ending.
-        """
-        notes = []
-        # Chromatic ascent
+    def _notes_powerup(self) -> list[Note]:
+        notes: list[Note] = []
         for i in range(8):
             notes.append(
                 Note(
@@ -134,72 +151,84 @@ class SFXGenerator(BaseModel):
                     velocity=80 + i * 5,
                 )
             )
-        # Hold final note
         notes.append(Note(pitch=72, duration=0.25, velocity=120))
-        return self._to_midi(notes)
+        return notes
+
+    def powerup(self) -> bytes:
+        """Generate power-up sound.
+
+        Ascending chromatic run with triumphant ending.
+        """
+        return self._to_midi(self._notes_powerup())
+
+    def _notes_menu_select(self) -> list[Note]:
+        return [
+            Note(pitch=67, duration=0.0625, velocity=80),  # G4
+        ]
 
     def menu_select(self) -> bytes:
         """Generate menu selection blip.
 
         Single short tone.
         """
-        notes = [
-            Note(pitch=67, duration=0.0625, velocity=80),  # G4
+        return self._to_midi(self._notes_menu_select())
+
+    def _notes_menu_confirm(self) -> list[Note]:
+        return [
+            Note(pitch=60, duration=0.0625, velocity=90),  # C4
+            Note(pitch=72, duration=0.125, velocity=100),  # C5
         ]
-        return self._to_midi(notes)
 
     def menu_confirm(self) -> bytes:
         """Generate menu confirmation sound.
 
         Two-note ascending confirmation.
         """
-        notes = [
-            Note(pitch=60, duration=0.0625, velocity=90),  # C4
-            Note(pitch=72, duration=0.125, velocity=100),  # C5
+        return self._to_midi(self._notes_menu_confirm())
+
+    def _notes_menu_back(self) -> list[Note]:
+        return [
+            Note(pitch=67, duration=0.0625, velocity=80),  # G4
+            Note(pitch=60, duration=0.0625, velocity=70),  # C4
         ]
-        return self._to_midi(notes)
 
     def menu_back(self) -> bytes:
         """Generate menu back/cancel sound.
 
         Two-note descending.
         """
-        notes = [
-            Note(pitch=67, duration=0.0625, velocity=80),  # G4
-            Note(pitch=60, duration=0.0625, velocity=70),  # C4
+        return self._to_midi(self._notes_menu_back())
+
+    def _notes_error(self) -> list[Note]:
+        return [
+            Note(pitch=36, duration=0.125, velocity=100),  # C2
+            Note(pitch=35, duration=0.125, velocity=90),  # B1
         ]
-        return self._to_midi(notes)
 
     def error(self) -> bytes:
         """Generate error/invalid action sound.
 
         Low buzzer tone.
         """
-        notes = [
-            Note(pitch=36, duration=0.125, velocity=100),  # C2
-            Note(pitch=35, duration=0.125, velocity=90),  # B1
+        return self._to_midi(self._notes_error())
+
+    def _notes_success(self) -> list[Note]:
+        return [
+            Note(pitch=60, duration=0.0625, velocity=100),  # C4
+            Note(pitch=64, duration=0.0625, velocity=105),  # E4
+            Note(pitch=67, duration=0.0625, velocity=110),  # G4
+            Note(pitch=72, duration=0.125, velocity=120),  # C5
         ]
-        return self._to_midi(notes)
 
     def success(self) -> bytes:
         """Generate success sound.
 
         Quick major arpeggio.
         """
-        notes = [
-            Note(pitch=60, duration=0.0625, velocity=100),  # C4
-            Note(pitch=64, duration=0.0625, velocity=105),  # E4
-            Note(pitch=67, duration=0.0625, velocity=110),  # G4
-            Note(pitch=72, duration=0.125, velocity=120),  # C5
-        ]
-        return self._to_midi(notes)
+        return self._to_midi(self._notes_success())
 
-    def door_open(self) -> bytes:
-        """Generate door opening sound.
-
-        Ascending sweep.
-        """
-        notes = []
+    def _notes_door_open(self) -> list[Note]:
+        notes: list[Note] = []
         for i in range(4):
             notes.append(
                 Note(
@@ -208,14 +237,17 @@ class SFXGenerator(BaseModel):
                     velocity=80 + i * 10,
                 )
             )
-        return self._to_midi(notes)
+        return notes
 
-    def door_close(self) -> bytes:
-        """Generate door closing sound.
+    def door_open(self) -> bytes:
+        """Generate door opening sound.
 
-        Descending sweep.
+        Ascending sweep.
         """
-        notes = []
+        return self._to_midi(self._notes_door_open())
+
+    def _notes_door_close(self) -> list[Note]:
+        notes: list[Note] = []
         for i in range(4):
             notes.append(
                 Note(
@@ -224,14 +256,17 @@ class SFXGenerator(BaseModel):
                     velocity=100 - i * 10,
                 )
             )
-        return self._to_midi(notes)
+        return notes
 
-    def laser(self) -> bytes:
-        """Generate laser/projectile sound.
+    def door_close(self) -> bytes:
+        """Generate door closing sound.
 
-        Quick descending zap.
+        Descending sweep.
         """
-        notes = []
+        return self._to_midi(self._notes_door_close())
+
+    def _notes_laser(self) -> list[Note]:
+        notes: list[Note] = []
         for i in range(5):
             notes.append(
                 Note(
@@ -240,67 +275,84 @@ class SFXGenerator(BaseModel):
                     velocity=120 - i * 15,
                 )
             )
-        return self._to_midi(notes)
+        return notes
+
+    def laser(self) -> bytes:
+        """Generate laser/projectile sound.
+
+        Quick descending zap.
+        """
+        return self._to_midi(self._notes_laser())
+
+    def _notes_shield(self) -> list[Note]:
+        notes: list[Note] = []
+        for i in range(6):
+            pitch = 72 if i % 2 == 0 else 76
+            notes.append(Note(pitch=pitch, duration=0.0625, velocity=90))
+        return notes
 
     def shield(self) -> bytes:
         """Generate shield activation sound.
 
         Warbling tone.
         """
-        notes = []
+        return self._to_midi(self._notes_shield())
+
+    def _notes_teleport(self) -> list[Note]:
+        notes: list[Note] = []
         for i in range(6):
-            pitch = 72 if i % 2 == 0 else 76
-            notes.append(Note(pitch=pitch, duration=0.0625, velocity=90))
-        return self._to_midi(notes)
+            notes.append(Note(pitch=48 + i * 6, duration=0.03125, velocity=100))
+        for i in range(6):
+            notes.append(Note(pitch=84 - i * 6, duration=0.03125, velocity=100))
+        return notes
 
     def teleport(self) -> bytes:
         """Generate teleport sound.
 
         Ascending then descending sweep.
         """
-        notes = []
-        # Ascending
-        for i in range(6):
-            notes.append(Note(pitch=48 + i * 6, duration=0.03125, velocity=100))
-        # Descending
-        for i in range(6):
-            notes.append(Note(pitch=84 - i * 6, duration=0.03125, velocity=100))
-        return self._to_midi(notes)
+        return self._to_midi(self._notes_teleport())
 
-    def heartbeat(self) -> bytes:
-        """Generate heartbeat/tension sound.
-
-        Two low thumps.
-        """
-        notes = [
+    def _notes_heartbeat(self) -> list[Note]:
+        return [
             Note(pitch=36, duration=0.125, velocity=100),
             Note(pitch=36, duration=0.0625, velocity=80),
             Note(pitch=0, duration=0.25, velocity=0),  # Rest
             Note(pitch=36, duration=0.125, velocity=90),
             Note(pitch=36, duration=0.0625, velocity=70),
         ]
-        return self._to_midi(notes)
+
+    def heartbeat(self) -> bytes:
+        """Generate heartbeat/tension sound.
+
+        Two low thumps.
+        """
+        return self._to_midi(self._notes_heartbeat())
+
+    def _notes_countdown_tick(self) -> list[Note]:
+        return [
+            Note(pitch=80, duration=0.03125, velocity=100),
+        ]
 
     def countdown_tick(self) -> bytes:
         """Generate countdown tick sound.
 
         Single percussive click.
         """
-        notes = [
-            Note(pitch=80, duration=0.03125, velocity=100),
+        return self._to_midi(self._notes_countdown_tick())
+
+    def _notes_countdown_final(self) -> list[Note]:
+        return [
+            Note(pitch=48, duration=0.125, velocity=120),
+            Note(pitch=60, duration=0.25, velocity=127),
         ]
-        return self._to_midi(notes)
 
     def countdown_final(self) -> bytes:
         """Generate final countdown sound.
 
         Dramatic final tick.
         """
-        notes = [
-            Note(pitch=48, duration=0.125, velocity=120),
-            Note(pitch=60, duration=0.25, velocity=127),
-        ]
-        return self._to_midi(notes)
+        return self._to_midi(self._notes_countdown_final())
 
     def save(self, midi_bytes: bytes, path: str) -> None:
         """Save MIDI bytes to a file.

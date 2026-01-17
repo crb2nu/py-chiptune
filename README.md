@@ -48,14 +48,31 @@ chiptune generate --preset overworld --root G --bpm 130 --bars 16 --effects spac
 # Preview audio (requires `flexinfer-chiptune[audio]`)
 chiptune generate --preset battle --play --no-save
 
+# Machine-readable metadata (for agents)
+chiptune generate --preset battle --format midi --no-save --json
+
 # Generate a sound effect
 chiptune sfx coin --output coin.mid
+
+# Sound effects as WAV (and optional playback)
+chiptune sfx coin --format wav --output coin.wav
+chiptune sfx coin --format wav --play --no-save
 
 # List all available presets
 chiptune list all
 
 # Machine-readable inventory (for agents)
 chiptune list --json
+```
+
+### Shell completion
+
+```bash
+# Bash
+eval "$(chiptune completion bash)"
+
+# Zsh
+eval "$(chiptune completion zsh)"
 ```
 
 ### Using Genre Presets

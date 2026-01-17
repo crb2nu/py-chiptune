@@ -56,3 +56,38 @@ class TestCLI:
 
         stderr = capsys.readouterr().err
         assert "conflicts with --output extension" in stderr
+
+    def test_generate_json_no_save(self, capsys) -> None:
+        from chiptune.cli import main
+
+        exit_code = main(["generate", "--json", "--format", "midi", "--no-save"])
+        assert exit_code == 0
+
+        stdout = capsys.readouterr().out.strip()
+        payload = json.loads(stdout)
+        assert payload["program"] == "chiptune"
+        assert payload["schema"] == 1
+        assert payload["command"] == "generate"
+        assert payload["format"] == "midi"
+        assert payload["saved"] is False
+        assert payload["output"] is None
+        assert isinstance(payload["seed"], int)
+
+    def test_sfx_format_conflict_errors(self, tmp_path, capsys) -> None:
+        from chiptune.cli import main
+
+        output_path = tmp_path / "coin.mid"
+        exit_code = main(["sfx", "coin", "--format", "wav", "--output", str(output_path)])
+        assert exit_code == 1
+
+        stderr = capsys.readouterr().err
+        assert "conflicts with --output extension" in stderr
+
+    def test_completion_bash(self, capsys) -> None:
+        from chiptune.cli import main
+
+        exit_code = main(["completion", "bash"])
+        assert exit_code == 0
+
+        stdout = capsys.readouterr().out
+        assert "complete -F _chiptune_complete chiptune" in stdout
