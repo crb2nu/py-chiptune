@@ -158,6 +158,22 @@ def _write_metadata(path: Path, payload: dict[str, object]) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
+def _file_artifact(path: Path) -> dict[str, object]:
+    import hashlib
+
+    hasher = hashlib.sha256()
+    size_bytes = 0
+    with path.open("rb") as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            size_bytes += len(chunk)
+            hasher.update(chunk)
+
+    return {"path": str(path), "bytes": size_bytes, "sha256": hasher.hexdigest()}
+
+
 def _as_json_items(items: list[tuple[str, str]]) -> list[dict[str, str]]:
     return [{"name": name, "description": desc} for name, desc in items]
 
@@ -251,6 +267,7 @@ def _generate_json_payload(
     output: str | None,
     saved: bool,
     played: bool,
+    artifact: dict[str, object] | None,
     track_name: str,
     track_bpm: int,
     track_time_signature: tuple[int, int],
@@ -274,6 +291,7 @@ def _generate_json_payload(
         "output": output,
         "saved": saved,
         "played": played,
+        "artifact": artifact,
         "track": {
             "name": track_name,
             "bpm": track_bpm,
@@ -367,6 +385,7 @@ def _finalize_generate(
                 output=None,
                 saved=False,
                 played=bool(args.play),
+                artifact=None,
                 **payload_base,
             )
             print(json.dumps(payload, indent=2))
@@ -380,6 +399,7 @@ def _finalize_generate(
                     output=None,
                     saved=False,
                     played=bool(args.play),
+                    artifact=None,
                     **payload_base,
                 ),
             )
@@ -390,6 +410,7 @@ def _finalize_generate(
 
         midi_exporter = MidiExporter()
         midi_exporter.export_file(track, str(output_path))
+        artifact = _file_artifact(output_path)
         if args.json:
             payload = _generate_json_payload(
                 args,
@@ -398,6 +419,7 @@ def _finalize_generate(
                 output=str(output_path),
                 saved=True,
                 played=bool(args.play),
+                artifact=artifact,
                 **payload_base,
             )
             print(json.dumps(payload, indent=2))
@@ -413,6 +435,7 @@ def _finalize_generate(
                     output=str(output_path),
                     saved=True,
                     played=bool(args.play),
+                    artifact=artifact,
                     **payload_base,
                 ),
             )
@@ -428,6 +451,7 @@ def _finalize_generate(
     else:
         audio_exporter.export_wav(track, str(output_path), effects=effects)
 
+    artifact = _file_artifact(output_path)
     if args.json:
         payload = _generate_json_payload(
             args,
@@ -436,6 +460,7 @@ def _finalize_generate(
             output=str(output_path),
             saved=True,
             played=bool(args.play),
+            artifact=artifact,
             **payload_base,
         )
         print(json.dumps(payload, indent=2))
@@ -451,6 +476,7 @@ def _finalize_generate(
                 output=str(output_path),
                 saved=True,
                 played=bool(args.play),
+                artifact=artifact,
                 **payload_base,
             ),
         )
@@ -466,6 +492,7 @@ def _sfx_metadata_payload(
     output: str | None,
     saved: bool,
     played: bool,
+    artifact: dict[str, object] | None,
     tempo: int,
     notes,
 ) -> dict[str, object]:
@@ -482,6 +509,7 @@ def _sfx_metadata_payload(
         "output": output,
         "saved": saved,
         "played": played,
+        "artifact": artifact,
         "tempo": tempo,
         "duration_beats": duration_beats,
         "duration_seconds": duration_seconds,
@@ -520,6 +548,7 @@ def _handle_sfx_midi(args: Namespace, *, sfx, kind: str, output_path: Path) -> i
     if output_path.suffix.lower() not in {".mid", ".midi"}:
         raise ValueError("MIDI output requires a .mid/.midi file extension.")
 
+    notes = sfx.notes(kind)
     payload = _sfx_metadata_payload(
         args,
         kind=kind,
@@ -527,19 +556,26 @@ def _handle_sfx_midi(args: Namespace, *, sfx, kind: str, output_path: Path) -> i
         output=None if args.no_save else str(output_path),
         saved=not args.no_save,
         played=bool(args.play),
+        artifact=None,
         tempo=sfx.tempo,
-        notes=sfx.notes(kind),
+        notes=notes,
     )
 
     if args.no_save:
         _emit_sfx_metadata(args, payload)
+        if getattr(args, "json", False):
+            print(json.dumps(payload, indent=2))
         return 0
 
     generator_method = getattr(sfx, kind)
     midi_bytes = generator_method()
     _ensure_parent_dir(output_path)
     sfx.save(midi_bytes, str(output_path))
-    print(f"Exported {args.type} SFX (MIDI) to: {output_path}")
+    payload["artifact"] = _file_artifact(output_path)
+    if getattr(args, "json", False):
+        print(json.dumps(payload, indent=2))
+    else:
+        print(f"Exported {args.type} SFX (MIDI) to: {output_path}")
     _emit_sfx_metadata(args, payload)
     return 0
 
@@ -556,6 +592,7 @@ def _handle_sfx_wav(args: Namespace, *, sfx, kind: str, output_path: Path) -> in
         output=None if args.no_save else str(output_path),
         saved=not args.no_save,
         played=bool(args.play),
+        artifact=None,
         tempo=sfx.tempo,
         notes=notes,
     )
@@ -565,6 +602,8 @@ def _handle_sfx_wav(args: Namespace, *, sfx, kind: str, output_path: Path) -> in
 
     if args.no_save:
         _emit_sfx_metadata(args, payload)
+        if getattr(args, "json", False):
+            print(json.dumps(payload, indent=2))
         return 0
 
     from chiptune.output.audio.exporter import AudioExporter
@@ -574,7 +613,11 @@ def _handle_sfx_wav(args: Namespace, *, sfx, kind: str, output_path: Path) -> in
 
     _ensure_parent_dir(output_path)
     output_path.write_bytes(wav_bytes)
-    print(f"Exported {args.type} SFX (WAV) to: {output_path}")
+    payload["artifact"] = _file_artifact(output_path)
+    if getattr(args, "json", False):
+        print(json.dumps(payload, indent=2))
+    else:
+        print(f"Exported {args.type} SFX (WAV) to: {output_path}")
     _emit_sfx_metadata(args, payload)
     return 0
 
@@ -739,6 +782,11 @@ def create_parser() -> argparse.ArgumentParser:
         "--no-save",
         action="store_true",
         help="Do not write an output file",
+    )
+    sfx_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output machine-readable JSON metadata",
     )
     sfx_parser.add_argument(
         "--metadata",

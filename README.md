@@ -59,6 +59,7 @@ chiptune sfx coin --output coin.mid
 chiptune sfx coin --format wav --output coin.wav
 chiptune sfx coin --format wav --play --no-save
 chiptune sfx coin --format wav --no-save --metadata coin.json
+chiptune sfx coin --json --format midi --no-save
 
 # List all available presets
 chiptune list all
