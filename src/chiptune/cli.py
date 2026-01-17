@@ -21,6 +21,12 @@ if TYPE_CHECKING:
     from argparse import Namespace
 
 
+class _ChiptuneHelpFormatter(
+    argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter
+):
+    pass
+
+
 GENRE_PRESET_METHODS: dict[str, str] = {
     "battle": "battle_theme",
     "overworld": "overworld",
@@ -210,7 +216,7 @@ def create_parser() -> argparse.ArgumentParser:
             "  chiptune list all\n"
             "  chiptune list --json\n"
         ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        formatter_class=_ChiptuneHelpFormatter,
     )
     parser.add_argument(
         "--version",
@@ -236,7 +242,7 @@ def create_parser() -> argparse.ArgumentParser:
         "-p",
         choices=[name for name, _ in GENRE_PRESET_ITEMS],
         default="overworld",
-        help="Genre preset (default: overworld)",
+        help="Genre preset",
     )
     gen_parser.add_argument(
         "--output",
@@ -250,7 +256,7 @@ def create_parser() -> argparse.ArgumentParser:
         "-b",
         type=int,
         default=8,
-        help="Length in bars (default: 8)",
+        help="Length in bars",
     )
     gen_parser.add_argument(
         "--root",
@@ -269,7 +275,7 @@ def create_parser() -> argparse.ArgumentParser:
         "-e",
         choices=[name for name, _ in EFFECT_PRESET_ITEMS],
         default="retro",
-        help="Effect preset (default: retro)",
+        help="Effect preset",
     )
     gen_parser.add_argument(
         "--no-drums",
@@ -298,7 +304,7 @@ def create_parser() -> argparse.ArgumentParser:
         "-f",
         choices=["wav", "midi"],
         default=None,
-        help="Output format (default: inferred from --output, else wav)",
+        help="Output format (inferred from --output if omitted)",
     )
     gen_parser.add_argument(
         "--play",
@@ -359,9 +365,15 @@ def cmd_generate(args: Namespace) -> int:
     """Execute the generate command."""
     import random
 
-    # Set seed if provided
-    if args.seed is not None:
-        random.seed(args.seed)
+    seed: int
+    if args.seed is None:
+        seed = random.randrange(2**32)
+        args.seed = seed
+    else:
+        seed = args.seed
+
+    random.seed(seed)
+    print(f"Seed: {seed}", file=sys.stderr)
 
     format_was_explicit, resolved_format, output_path = _resolve_generate_output(
         args.format, args.output
@@ -435,6 +447,9 @@ def cmd_sfx(args: Namespace) -> int:
     output_path: Path = args.output or Path(f"{args.type}.mid")
     if output_path.suffix == "":
         output_path = output_path.with_suffix(".mid")
+
+    if output_path.suffix.lower() not in {".mid", ".midi"}:
+        raise ValueError("SFX output is MIDI-only. Use a .mid/.midi file extension.")
 
     _ensure_parent_dir(output_path)
 
