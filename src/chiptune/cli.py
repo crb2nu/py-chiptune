@@ -153,8 +153,26 @@ def _ensure_parent_dir(path: Path) -> None:
         parent.mkdir(parents=True, exist_ok=True)
 
 
+def _write_metadata(path: Path, payload: dict[str, object]) -> None:
+    _ensure_parent_dir(path)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
 def _as_json_items(items: list[tuple[str, str]]) -> list[dict[str, str]]:
     return [{"name": name, "description": desc} for name, desc in items]
+
+
+def _check_format_output_conflict(
+    format_was_explicit: bool, output: Path | None, resolved_format: str
+) -> None:
+    if not format_was_explicit or output is None:
+        return
+
+    inferred = _infer_format_from_path(output)
+    if inferred is not None and inferred != resolved_format:
+        raise ValueError(
+            f"--format {resolved_format} conflicts with --output extension {output.suffix}"
+        )
 
 
 def _resolve_generate_output(format_opt: str | None, output: Path | None) -> tuple[bool, str, Path]:
@@ -233,6 +251,13 @@ def _generate_json_payload(
     output: str | None,
     saved: bool,
     played: bool,
+    track_name: str,
+    track_bpm: int,
+    track_time_signature: tuple[int, int],
+    track_key_root: str,
+    track_key_mode: str,
+    track_length_beats: float,
+    track_duration_seconds: float,
 ) -> dict[str, object]:
     return {
         "program": "chiptune",
@@ -249,6 +274,15 @@ def _generate_json_payload(
         "output": output,
         "saved": saved,
         "played": played,
+        "track": {
+            "name": track_name,
+            "bpm": track_bpm,
+            "time_signature": list(track_time_signature),
+            "key_root": track_key_root,
+            "key_mode": track_key_mode,
+            "length_beats": track_length_beats,
+            "duration_seconds": track_duration_seconds,
+        },
     }
 
 
@@ -303,6 +337,27 @@ def _finalize_generate(
     effects,
     rendered_audio,
 ) -> int:
+    try:
+        duration_seconds = float(track.duration_seconds())
+    except Exception:
+        duration_seconds = 0.0
+
+    key = getattr(track, "key", None)
+    key_root = getattr(key, "root", "unknown") if key is not None else "unknown"
+    key_mode = "unknown"
+    if key is not None:
+        raw_mode = getattr(key, "mode", None)
+        key_mode = getattr(raw_mode, "value", raw_mode) if raw_mode is not None else "unknown"
+
+    payload_base = {
+        "track_name": getattr(track, "name", "unknown"),
+        "track_bpm": int(getattr(track, "bpm", 0)),
+        "track_time_signature": tuple(getattr(track, "time_signature", (4, 4))),
+        "track_key_root": key_root,
+        "track_key_mode": key_mode,
+        "track_length_beats": float(getattr(track, "length_beats", 0.0)),
+        "track_duration_seconds": duration_seconds,
+    }
     if args.no_save:
         if args.json:
             payload = _generate_json_payload(
@@ -312,8 +367,22 @@ def _finalize_generate(
                 output=None,
                 saved=False,
                 played=bool(args.play),
+                **payload_base,
             )
             print(json.dumps(payload, indent=2))
+        if getattr(args, "metadata", None):
+            _write_metadata(
+                args.metadata,
+                _generate_json_payload(
+                    args,
+                    seed=seed,
+                    resolved_format=resolved_format,
+                    output=None,
+                    saved=False,
+                    played=bool(args.play),
+                    **payload_base,
+                ),
+            )
         return 0
 
     if resolved_format == "midi":
@@ -329,10 +398,24 @@ def _finalize_generate(
                 output=str(output_path),
                 saved=True,
                 played=bool(args.play),
+                **payload_base,
             )
             print(json.dumps(payload, indent=2))
         else:
             print(f"Exported MIDI to: {output_path}")
+        if getattr(args, "metadata", None):
+            _write_metadata(
+                args.metadata,
+                _generate_json_payload(
+                    args,
+                    seed=seed,
+                    resolved_format=resolved_format,
+                    output=str(output_path),
+                    saved=True,
+                    played=bool(args.play),
+                    **payload_base,
+                ),
+            )
         return 0
 
     from chiptune.output.audio import AudioExporter
@@ -353,11 +436,146 @@ def _finalize_generate(
             output=str(output_path),
             saved=True,
             played=bool(args.play),
+            **payload_base,
         )
         print(json.dumps(payload, indent=2))
     else:
         print(f"Exported WAV to: {output_path}")
+    if getattr(args, "metadata", None):
+        _write_metadata(
+            args.metadata,
+            _generate_json_payload(
+                args,
+                seed=seed,
+                resolved_format=resolved_format,
+                output=str(output_path),
+                saved=True,
+                played=bool(args.play),
+                **payload_base,
+            ),
+        )
 
+    return 0
+
+
+def _sfx_metadata_payload(
+    args: Namespace,
+    *,
+    kind: str,
+    resolved_format: str,
+    output: str | None,
+    saved: bool,
+    played: bool,
+    tempo: int,
+    notes,
+) -> dict[str, object]:
+    duration_beats = float(sum(note.duration for note in notes))
+    duration_seconds = duration_beats * 60.0 / float(tempo)
+    return {
+        "program": "chiptune",
+        "version": get_version(),
+        "schema": 1,
+        "command": "sfx",
+        "type": args.type,
+        "kind": kind,
+        "format": resolved_format,
+        "output": output,
+        "saved": saved,
+        "played": played,
+        "tempo": tempo,
+        "duration_beats": duration_beats,
+        "duration_seconds": duration_seconds,
+        "note_count": len(notes),
+    }
+
+
+def _emit_sfx_metadata(args: Namespace, payload: dict[str, object]) -> None:
+    if args.metadata is None:
+        return
+    _write_metadata(args.metadata, payload)
+
+
+def _play_sfx_audio(notes, *, tempo: int) -> None:
+    from chiptune.chip.channels import Channel
+    from chiptune.output.audio.exporter import AudioExporter
+    from chiptune.output.audio.playback import AudioPlayer
+
+    if not AudioPlayer.is_available():
+        raise ImportError(
+            "Audio playback requires optional dependencies. Install with: "
+            "pip install 'flexinfer-chiptune[audio]'"
+        )
+
+    import numpy as np
+
+    exporter = AudioExporter()
+    channel = Channel.pulse(channel_id=0)
+    channel.add_notes(notes)
+    mono = exporter.render_channel(channel, tempo)
+    stereo = np.column_stack([mono, mono]).astype(np.float32, copy=False)
+    AudioPlayer().play(stereo)
+
+
+def _handle_sfx_midi(args: Namespace, *, sfx, kind: str, output_path: Path) -> int:
+    if output_path.suffix.lower() not in {".mid", ".midi"}:
+        raise ValueError("MIDI output requires a .mid/.midi file extension.")
+
+    payload = _sfx_metadata_payload(
+        args,
+        kind=kind,
+        resolved_format="midi",
+        output=None if args.no_save else str(output_path),
+        saved=not args.no_save,
+        played=bool(args.play),
+        tempo=sfx.tempo,
+        notes=sfx.notes(kind),
+    )
+
+    if args.no_save:
+        _emit_sfx_metadata(args, payload)
+        return 0
+
+    generator_method = getattr(sfx, kind)
+    midi_bytes = generator_method()
+    _ensure_parent_dir(output_path)
+    sfx.save(midi_bytes, str(output_path))
+    print(f"Exported {args.type} SFX (MIDI) to: {output_path}")
+    _emit_sfx_metadata(args, payload)
+    return 0
+
+
+def _handle_sfx_wav(args: Namespace, *, sfx, kind: str, output_path: Path) -> int:
+    if output_path.suffix.lower() != ".wav":
+        raise ValueError("WAV output requires a .wav file extension.")
+
+    notes = sfx.notes(kind)
+    payload = _sfx_metadata_payload(
+        args,
+        kind=kind,
+        resolved_format="wav",
+        output=None if args.no_save else str(output_path),
+        saved=not args.no_save,
+        played=bool(args.play),
+        tempo=sfx.tempo,
+        notes=notes,
+    )
+
+    if args.play:
+        _play_sfx_audio(notes, tempo=sfx.tempo)
+
+    if args.no_save:
+        _emit_sfx_metadata(args, payload)
+        return 0
+
+    from chiptune.output.audio.exporter import AudioExporter
+
+    exporter = AudioExporter()
+    wav_bytes = exporter.export_sfx(notes, tempo=sfx.tempo)
+
+    _ensure_parent_dir(output_path)
+    output_path.write_bytes(wav_bytes)
+    print(f"Exported {args.type} SFX (WAV) to: {output_path}")
+    _emit_sfx_metadata(args, payload)
     return 0
 
 
@@ -480,6 +698,12 @@ def create_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Output machine-readable JSON metadata",
     )
+    gen_parser.add_argument(
+        "--metadata",
+        type=Path,
+        default=None,
+        help="Write JSON metadata to this file",
+    )
     gen_parser.set_defaults(func=cmd_generate)
 
     # SFX command
@@ -516,6 +740,12 @@ def create_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Do not write an output file",
     )
+    sfx_parser.add_argument(
+        "--metadata",
+        type=Path,
+        default=None,
+        help="Write JSON metadata to this file",
+    )
     sfx_parser.set_defaults(func=cmd_sfx)
 
     # List command
@@ -551,6 +781,14 @@ def create_parser() -> argparse.ArgumentParser:
     )
     completion_parser.set_defaults(func=cmd_completion)
 
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="Check environment and optional dependencies",
+        description="Print diagnostics about installed dependencies and optional features.",
+    )
+    doctor_parser.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+    doctor_parser.set_defaults(func=cmd_doctor)
+
     return parser
 
 
@@ -563,12 +801,7 @@ def cmd_generate(args: Namespace) -> int:
     format_was_explicit, resolved_format, output_path = _resolve_generate_output(
         args.format, args.output
     )
-    if format_was_explicit and args.output is not None:
-        inferred = _infer_format_from_path(args.output)
-        if inferred is not None and inferred != resolved_format:
-            raise ValueError(
-                f"--format {resolved_format} conflicts with --output extension {args.output.suffix}"
-            )
+    _check_format_output_conflict(format_was_explicit, args.output, resolved_format)
 
     if not args.no_save:
         _ensure_parent_dir(output_path)
@@ -595,70 +828,15 @@ def cmd_sfx(args: Namespace) -> int:
     format_was_explicit, resolved_format, output_path = _resolve_sfx_output(
         args.format, args.output, args.type
     )
-
-    if format_was_explicit and args.output is not None:
-        inferred = _infer_format_from_path(args.output)
-        if inferred is not None and inferred != resolved_format:
-            raise ValueError(
-                f"--format {resolved_format} conflicts with --output extension {args.output.suffix}"
-            )
+    _check_format_output_conflict(format_was_explicit, args.output, resolved_format)
 
     if args.play and resolved_format != "wav":
         raise ValueError("--play is only supported with --format wav")
 
     method_name = SFX_METHODS[args.type]
     if resolved_format == "midi":
-        if output_path.suffix.lower() not in {".mid", ".midi"}:
-            raise ValueError("MIDI output requires a .mid/.midi file extension.")
-
-        generator_method = getattr(sfx, method_name)
-        midi_bytes = generator_method()
-
-        if args.no_save:
-            return 0
-
-        _ensure_parent_dir(output_path)
-        sfx.save(midi_bytes, str(output_path))
-        print(f"Exported {args.type} SFX (MIDI) to: {output_path}")
-        return 0
-
-    if output_path.suffix.lower() != ".wav":
-        raise ValueError("WAV output requires a .wav file extension.")
-
-    notes = sfx.notes(method_name)
-
-    if args.play:
-        from chiptune.chip.channels import Channel
-        from chiptune.output.audio.exporter import AudioExporter
-        from chiptune.output.audio.playback import AudioPlayer
-
-        if not AudioPlayer.is_available():
-            raise ImportError(
-                "Audio playback requires optional dependencies. Install with: "
-                "pip install 'flexinfer-chiptune[audio]'"
-            )
-
-        import numpy as np
-
-        exporter = AudioExporter()
-        channel = Channel.pulse(channel_id=0)
-        channel.add_notes(notes)
-        mono = exporter.render_channel(channel, sfx.tempo)
-        stereo = np.column_stack([mono, mono]).astype(np.float32, copy=False)
-        AudioPlayer().play(stereo)
-
-    if args.no_save:
-        return 0
-
-    from chiptune.output.audio.exporter import AudioExporter
-
-    exporter = AudioExporter()
-    wav_bytes = exporter.export_sfx(notes, tempo=sfx.tempo)
-
-    _ensure_parent_dir(output_path)
-    output_path.write_bytes(wav_bytes)
-    print(f"Exported {args.type} SFX (WAV) to: {output_path}")
-    return 0
+        return _handle_sfx_midi(args, sfx=sfx, kind=method_name, output_path=output_path)
+    return _handle_sfx_wav(args, sfx=sfx, kind=method_name, output_path=output_path)
 
 
 def cmd_list(args: Namespace) -> int:
@@ -785,6 +963,55 @@ bashcompinit
 """ + bash_script
 
     print(zsh_script)
+    return 0
+
+
+def cmd_doctor(args: Namespace) -> int:
+    """Check environment and optional dependencies."""
+    import importlib.util
+    import platform
+
+    checks: dict[str, dict[str, object]] = {}
+
+    def check_module(module: str) -> None:
+        spec = importlib.util.find_spec(module)
+        checks[module] = {"available": spec is not None}
+
+    for module in ["music21", "midiutil", "numpy", "scipy", "soundfile", "sounddevice"]:
+        check_module(module)
+
+    payload: dict[str, object] = {
+        "program": "chiptune",
+        "version": get_version(),
+        "schema": 1,
+        "python": {
+            "version": platform.python_version(),
+            "implementation": platform.python_implementation(),
+            "platform": platform.platform(),
+        },
+        "modules": checks,
+        "install": {
+            "base": "pip install flexinfer-chiptune",
+            "audio": "pip install 'flexinfer-chiptune[audio]'",
+        },
+    }
+
+    if args.json:
+        print(json.dumps(payload, indent=2))
+        return 0
+
+    print("chiptune doctor")
+    print(f"- version: {payload['version']}")
+    py = payload["python"]
+    print(f"- python: {py['implementation']} {py['version']} ({py['platform']})")
+    print("- modules:")
+    for module, info in checks.items():
+        status = "OK" if info["available"] else "MISSING"
+        print(f"  - {module}: {status}")
+    print("- install:")
+    install = payload["install"]
+    print(f"  - base: {install['base']}")
+    print(f"  - audio: {install['audio']}")
     return 0
 
 

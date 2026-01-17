@@ -50,6 +50,7 @@ chiptune generate --preset battle --play --no-save
 
 # Machine-readable metadata (for agents)
 chiptune generate --preset battle --format midi --no-save --json
+chiptune generate --preset battle --format midi --no-save --metadata battle.json
 
 # Generate a sound effect
 chiptune sfx coin --output coin.mid
@@ -57,6 +58,7 @@ chiptune sfx coin --output coin.mid
 # Sound effects as WAV (and optional playback)
 chiptune sfx coin --format wav --output coin.wav
 chiptune sfx coin --format wav --play --no-save
+chiptune sfx coin --format wav --no-save --metadata coin.json
 
 # List all available presets
 chiptune list all
@@ -73,6 +75,13 @@ eval "$(chiptune completion bash)"
 
 # Zsh
 eval "$(chiptune completion zsh)"
+```
+
+### Doctor
+
+```bash
+chiptune doctor
+chiptune doctor --json
 ```
 
 ### Using Genre Presets

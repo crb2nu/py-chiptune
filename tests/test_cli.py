@@ -91,3 +91,27 @@ class TestCLI:
 
         stdout = capsys.readouterr().out
         assert "complete -F _chiptune_complete chiptune" in stdout
+
+    def test_generate_metadata_file(self, tmp_path) -> None:
+        from chiptune.cli import main
+
+        metadata_path = tmp_path / "gen.json"
+        exit_code = main(
+            ["generate", "--format", "midi", "--no-save", "--metadata", str(metadata_path)]
+        )
+        assert exit_code == 0
+        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+        assert payload["command"] == "generate"
+        assert payload["saved"] is False
+
+    def test_sfx_metadata_file(self, tmp_path) -> None:
+        from chiptune.cli import main
+
+        metadata_path = tmp_path / "sfx.json"
+        exit_code = main(
+            ["sfx", "coin", "--format", "midi", "--no-save", "--metadata", str(metadata_path)]
+        )
+        assert exit_code == 0
+        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+        assert payload["command"] == "sfx"
+        assert payload["saved"] is False
