@@ -471,7 +471,7 @@ def cmd_list(args: Namespace) -> int:
     category = args.category
 
     if args.json:
-        payload: dict[str, object] = {}
+        payload: dict[str, object] = {"program": "chiptune", "version": get_version(), "schema": 1}
         if category in ("presets", "all"):
             payload["presets"] = _as_json_items(GENRE_PRESET_ITEMS)
         if category in ("effects", "all"):

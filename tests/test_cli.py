@@ -15,6 +15,9 @@ class TestCLI:
         stdout = capsys.readouterr().out.strip()
         payload = json.loads(stdout)
 
+        assert payload["program"] == "chiptune"
+        assert payload["schema"] == 1
+        assert isinstance(payload["version"], str)
         assert "presets" in payload
         assert "effects" in payload
         assert "sfx" in payload
