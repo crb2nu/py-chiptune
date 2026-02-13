@@ -77,7 +77,9 @@ class FMOperator(BaseModel):
     # Feedback (only applies to OP1 in most algorithms)
     feedback: int = 0  # 0-7
 
-    def generate_envelope(self, num_samples: int, sample_rate: int) -> NDArray[np.float32]:
+    def generate_envelope(
+        self, num_samples: int, sample_rate: int
+    ) -> NDArray[np.float32]:
         """Generate ADSR envelope for this operator."""
         # Convert YM2612 rates to times (simplified)
         attack_time = 0.002 + (31 - self.attack_rate) * 0.05
@@ -88,7 +90,9 @@ class FMOperator(BaseModel):
         attack_samples = int(attack_time * sample_rate)
         decay_samples = int(decay_time * sample_rate)
         release_samples = int(release_time * sample_rate)
-        sustain_samples = max(0, num_samples - attack_samples - decay_samples - release_samples)
+        sustain_samples = max(
+            0, num_samples - attack_samples - decay_samples - release_samples
+        )
 
         envelope = np.zeros(num_samples, dtype=np.float32)
         pos = 0
@@ -214,6 +218,27 @@ class FMVoice(ChipVoice):
         feedback: float,
     ) -> NDArray[np.floating]:
         """Apply FM algorithm to generate output."""
+        # Rust fast path
+        from chiptune._accel import RUST_AVAILABLE, _rust_fm_algorithm
+
+        if RUST_AVAILABLE and _rust_fm_algorithm is not None:
+            phases = [
+                phase1.tolist(),
+                phase2.tolist(),
+                phase3.tolist(),
+                phase4.tolist(),
+            ]
+            envelopes = [env1.tolist(), env2.tolist(), env3.tolist(), env4.tolist()]
+            return np.asarray(
+                _rust_fm_algorithm(
+                    int(self.algorithm),
+                    phases,
+                    envelopes,
+                    len(phase1),
+                    feedback_level=feedback,
+                )
+            )
+
         # Simplified FM: modulation index based on envelope
         mod_index = 4.0  # Base modulation index
 

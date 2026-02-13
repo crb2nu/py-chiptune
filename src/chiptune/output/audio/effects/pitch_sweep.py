@@ -62,6 +62,23 @@ class PitchSweep(PitchEffect):
         if len(time_array) == 0:
             return np.array([], dtype=np.float32)
 
+        # Rust fast path
+        from chiptune._accel import RUST_AVAILABLE, _rust_pitch_sweep
+
+        if RUST_AVAILABLE and _rust_pitch_sweep is not None:
+            direction = "up" if self.direction == SweepDirection.UP else "down"
+            return np.asarray(
+                _rust_pitch_sweep(
+                    base_frequency,
+                    len(time_array),
+                    float(sample_rate),
+                    direction=direction,
+                    rate=self.rate,
+                    shift=self.shift,
+                    start_delay=self.start_delay,
+                )
+            ).astype(np.float32)
+
         # NES sweeps update at ~120Hz (every other frame at 60fps)
         sweep_rate_hz = 120.0 / (self.rate + 1)
         samples_per_sweep = int(sample_rate / sweep_rate_hz)
@@ -162,7 +179,8 @@ class Portamento(PitchEffect):
                 if i < glide_samples:
                     t = i / glide_samples
                     frequencies[i] = (
-                        self.start_frequency + (base_frequency - self.start_frequency) * t
+                        self.start_frequency
+                        + (base_frequency - self.start_frequency) * t
                     )
                 else:
                     frequencies[i] = base_frequency
@@ -275,7 +293,10 @@ class PitchBend(PitchEffect):
             elif i < bend_samples + hold_samples:
                 # Hold phase
                 semitones = self.bend_semitones
-            elif self.return_time > 0 and i < bend_samples + hold_samples + return_samples:
+            elif (
+                self.return_time > 0
+                and i < bend_samples + hold_samples + return_samples
+            ):
                 # Return phase
                 t = (i - bend_samples - hold_samples) / return_samples
                 semitones = self.bend_semitones * (1 - t)

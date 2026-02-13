@@ -52,6 +52,9 @@ htmlcov/
 *.mid
 !examples/*.mid
 
+# Rust
+rust/target/
+
 # OS
 .DS_Store
 Thumbs.db

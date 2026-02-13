@@ -57,6 +57,21 @@ class LFO(BaseModel):
         if num_samples == 0:
             return np.array([], dtype=np.float32)
 
+        # Rust fast path
+        from chiptune._accel import RUST_AVAILABLE, _rust_lfo
+
+        if RUST_AVAILABLE and _rust_lfo is not None:
+            return np.asarray(
+                _rust_lfo(
+                    num_samples,
+                    float(sample_rate),
+                    rate=self.rate,
+                    depth=self.depth,
+                    shape=self.shape.value,
+                    phase=self.phase,
+                )
+            ).astype(np.float32)
+
         # Time array
         t = np.arange(num_samples, dtype=np.float32) / sample_rate
 

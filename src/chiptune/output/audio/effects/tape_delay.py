@@ -53,7 +53,9 @@ class TapeDelay(SampleEffect):
         ).astype(np.float32)
         return result
 
-    def _apply_lowpass(self, samples: NDArray[np.float32], sample_rate: int) -> NDArray[np.float32]:
+    def _apply_lowpass(
+        self, samples: NDArray[np.float32], sample_rate: int
+    ) -> NDArray[np.float32]:
         """Apply lowpass filter (tape loses high frequencies)."""
         nyquist = sample_rate / 2
         cutoff = min(self.highcut, nyquist * 0.95)
@@ -61,10 +63,14 @@ class TapeDelay(SampleEffect):
 
         # Simple 2nd order lowpass
         b, a = scipy_signal.butter(2, normalized_cutoff, btype="low")
-        filtered: NDArray[np.float32] = scipy_signal.lfilter(b, a, samples).astype(np.float32)
+        filtered: NDArray[np.float32] = scipy_signal.lfilter(b, a, samples).astype(
+            np.float32
+        )
         return filtered
 
-    def _generate_wow_flutter(self, num_samples: int, sample_rate: int) -> NDArray[np.float32]:
+    def _generate_wow_flutter(
+        self, num_samples: int, sample_rate: int
+    ) -> NDArray[np.float32]:
         """Generate combined wow (slow) and flutter (fast) modulation."""
         if self.wow_depth == 0 and self.flutter_depth == 0:
             return np.zeros(num_samples, dtype=np.float32)
@@ -77,12 +83,16 @@ class TapeDelay(SampleEffect):
             modulation += wow_lfo.generate(num_samples, sample_rate)
 
             # Add slight randomness to wow
-            wow_lfo2 = LFO(rate=1.3, depth=self.wow_depth * 0.5, shape=LFOShape.TRIANGLE)
+            wow_lfo2 = LFO(
+                rate=1.3, depth=self.wow_depth * 0.5, shape=LFOShape.TRIANGLE
+            )
             modulation += wow_lfo2.generate(num_samples, sample_rate)
 
         # Flutter: faster, mechanical variation (5-15 Hz)
         if self.flutter_depth > 0:
-            flutter_lfo = LFO(rate=9.0, depth=self.flutter_depth, shape=LFOShape.TRIANGLE)
+            flutter_lfo = LFO(
+                rate=9.0, depth=self.flutter_depth, shape=LFOShape.TRIANGLE
+            )
             modulation += flutter_lfo.generate(num_samples, sample_rate)
 
         return modulation
@@ -121,6 +131,24 @@ class TapeDelay(SampleEffect):
         if len(samples) == 0:
             return samples
 
+        # Rust fast path
+        from chiptune._accel import RUST_AVAILABLE, _rust_tape_delay
+
+        if RUST_AVAILABLE and _rust_tape_delay is not None:
+            return np.asarray(
+                _rust_tape_delay(
+                    samples.tolist(),
+                    float(sample_rate),
+                    delay_time=self.delay_time,
+                    feedback=self.feedback,
+                    mix=self.mix,
+                    wow_depth=self.wow_depth,
+                    flutter_depth=self.flutter_depth,
+                    saturation=self.saturation,
+                    highcut=self.highcut,
+                )
+            )
+
         delay_samples = int(self.delay_time * sample_rate)
 
         # Generate wow/flutter modulation
@@ -156,7 +184,9 @@ class TapeDelay(SampleEffect):
 
         # Add subtle noise based on tape age
         if self.tape_age > 0:
-            noise = np.random.default_rng(42).normal(0, 0.001 * self.tape_age, len(output))
+            noise = np.random.default_rng(42).normal(
+                0, 0.001 * self.tape_age, len(output)
+            )
             output = output + noise.astype(np.float32)
 
         # Mix dry and wet

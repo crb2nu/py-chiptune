@@ -42,7 +42,9 @@ class ChannelMixer(BaseModel):
         NESChannels.NOISE_ID: 0.0,  # Center (drums)
     }
 
-    def mix(self, channel_samples: dict[int, NDArray[np.float32]]) -> NDArray[np.float32]:
+    def mix(
+        self, channel_samples: dict[int, NDArray[np.float32]]
+    ) -> NDArray[np.float32]:
         """Mix channel sample arrays into stereo output.
 
         Args:
@@ -53,6 +55,23 @@ class ChannelMixer(BaseModel):
         """
         if not channel_samples:
             return np.zeros((0, 2), dtype=np.float32)
+
+        # Rust fast path
+        from chiptune._accel import RUST_AVAILABLE, _rust_mix_channels
+
+        if RUST_AVAILABLE and _rust_mix_channels is not None:
+            max_length = max(len(s) for s in channel_samples.values())
+            channels_list = []
+            for channel_id, samp in channel_samples.items():
+                vol = self.CHANNEL_VOLUMES.get(channel_id, 0.25)
+                pan = self.CHANNEL_PAN.get(channel_id, 0.0)
+                channels_list.append((samp.tolist(), float(vol), float(pan)))
+            left_arr, right_arr = _rust_mix_channels(channels_list, max_length)
+            left_out = np.asarray(left_arr) * self.master_volume
+            right_out = np.asarray(right_arr) * self.master_volume
+            stereo = np.column_stack([left_out, right_out])
+            stereo = np.tanh(stereo)
+            return stereo.astype(np.float32)
 
         # Find the longest channel
         max_length = max(len(s) for s in channel_samples.values())
@@ -87,7 +106,9 @@ class ChannelMixer(BaseModel):
 
         return stereo.astype(np.float32)
 
-    def mix_mono(self, channel_samples: dict[int, NDArray[np.float32]]) -> NDArray[np.float32]:
+    def mix_mono(
+        self, channel_samples: dict[int, NDArray[np.float32]]
+    ) -> NDArray[np.float32]:
         """Mix channel sample arrays into mono output.
 
         Args:

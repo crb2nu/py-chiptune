@@ -146,6 +146,14 @@ class SIDVoice(ChipVoice):
         sample_rate: int,
     ) -> NDArray[np.float32]:
         """Generate SID noise using 23-bit LFSR."""
+        # Rust fast path
+        from chiptune._accel import RUST_AVAILABLE, _rust_sid_noise
+
+        if RUST_AVAILABLE and _rust_sid_noise is not None:
+            return np.asarray(
+                _rust_sid_noise(frequency, num_samples, amplitude, float(sample_rate))
+            )
+
         # SID noise shifts LFSR at oscillator frequency
         samples_per_shift = sample_rate / frequency if frequency > 0 else num_samples
         samples = np.zeros(num_samples, dtype=np.float32)

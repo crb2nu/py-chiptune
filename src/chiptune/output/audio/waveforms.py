@@ -51,7 +51,9 @@ class PulseWaveGenerator(WaveformGenerator):
         DutyCycle.DUTY_75: 0.75,
     }
 
-    def __init__(self, duty: DutyCycle = DutyCycle.DUTY_25, sample_rate: int = 44100) -> None:
+    def __init__(
+        self, duty: DutyCycle = DutyCycle.DUTY_25, sample_rate: int = 44100
+    ) -> None:
         super().__init__(sample_rate)
         self.duty_ratio = self.DUTY_RATIOS[duty]
 
@@ -198,6 +200,17 @@ class NoiseGenerator(WaveformGenerator):
             Mono samples as float32 array
         """
         num_samples = int(duration * self.sample_rate)
+
+        # Rust fast path
+        from chiptune._accel import RUST_AVAILABLE, _rust_nes_noise
+
+        if RUST_AVAILABLE and _rust_nes_noise is not None:
+            mode = "short" if self.feedback_bit == 6 else "long"
+            return np.asarray(
+                _rust_nes_noise(
+                    int(frequency), num_samples, amplitude, self.sample_rate, mode
+                )
+            )
 
         # Treat frequency as period for noise generation
         period = int(frequency)

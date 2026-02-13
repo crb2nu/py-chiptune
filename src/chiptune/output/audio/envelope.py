@@ -99,6 +99,22 @@ class ADSREnvelope(BaseModel):
         if total_samples <= 0:
             return np.array([], dtype=np.float32)
 
+        # Rust fast path
+        from chiptune._accel import RUST_AVAILABLE, _rust_adsr
+
+        if RUST_AVAILABLE and _rust_adsr is not None:
+            result = np.asarray(
+                _rust_adsr(
+                    total_samples,
+                    float(sample_rate),
+                    attack=self.attack_time,
+                    decay=self.decay_time,
+                    sustain=self.sustain_level,
+                    release=self.release_time,
+                )
+            )
+            return (result * velocity).astype(np.float32)
+
         envelope = np.zeros(total_samples, dtype=np.float32)
 
         attack_samples = int(self.attack_time * sample_rate)
@@ -106,7 +122,9 @@ class ADSREnvelope(BaseModel):
         release_samples = int(self.release_time * sample_rate)
 
         # Sustain fills the remainder
-        sustain_samples = max(0, total_samples - attack_samples - decay_samples - release_samples)
+        sustain_samples = max(
+            0, total_samples - attack_samples - decay_samples - release_samples
+        )
 
         current_sample = 0
 
@@ -138,7 +156,9 @@ class ADSREnvelope(BaseModel):
             count = end - current_sample
             if count > 0:
                 start_level = (
-                    envelope[current_sample - 1] if current_sample > 0 else self.sustain_level
+                    envelope[current_sample - 1]
+                    if current_sample > 0
+                    else self.sustain_level
                 )
                 envelope[current_sample:end] = np.linspace(start_level, 0, count)
 
