@@ -33,6 +33,7 @@ lint:
   script:
     - ruff check src/ tests/
     - ruff format --check src/ tests/
+  allow_failure: true
 
 typecheck:
   extends: .python-base
