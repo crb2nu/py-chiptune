@@ -48,8 +48,9 @@ chiptune = "chiptune.cli:main"
 
 [tool.maturin]
 manifest-path = "rust/Cargo.toml"
-module-name = "chiptune_core"
+module-name = "chiptune.chiptune_core"
 features = ["pyo3/extension-module"]
+python-source = "src"
 
 [tool.ruff]
 line-length = 100
