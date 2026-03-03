@@ -4,7 +4,13 @@ Tries to import the Rust chiptune_core module. If unavailable,
 all functions fall back to None and callers use the Python implementation.
 """
 
+import os
+
+_DISABLE_RUST = os.getenv("CHIPTUNE_DISABLE_RUST", "").lower() in {"1", "true", "yes"}
+
 try:
+    if _DISABLE_RUST:
+        raise ImportError("Rust acceleration disabled by CHIPTUNE_DISABLE_RUST")
     from chiptune.chiptune_core import (
         nes_noise as _rust_nes_noise,
         sid_noise as _rust_sid_noise,
@@ -20,6 +26,8 @@ try:
     RUST_AVAILABLE = True
 except ImportError:
     try:
+        if _DISABLE_RUST:
+            raise ImportError("Rust acceleration disabled by CHIPTUNE_DISABLE_RUST")
         from chiptune_core import (
             nes_noise as _rust_nes_noise,
             sid_noise as _rust_sid_noise,

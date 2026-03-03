@@ -44,6 +44,8 @@ typecheck:
 
 test:
   extends: .python-test
+  variables:
+    CHIPTUNE_DISABLE_RUST: "1"
 
 build:
   extends: .python-base
