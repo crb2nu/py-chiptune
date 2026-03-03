@@ -8,6 +8,24 @@ stages: [lint, test, build, publish]
 variables:
   PUBLISH_PUBLIC_PYPI: "false"
 
+# Override base so maturin can use system Rust and avoid network rustup bootstrap.
+.python-base:
+  image: python:3.12
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+  cache:
+    key: "${CI_COMMIT_REF_SLUG}-python"
+    paths:
+      - .pip-cache/
+      - .venv/
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends cargo rustc ca-certificates
+    - update-ca-certificates
+    - python -m venv .venv
+    - source .venv/bin/activate
+    - pip install --upgrade pip wheel
+    - pip install -e ".[dev]"
+
 lint:
   extends: .python-lint
   script:
