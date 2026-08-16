@@ -32,7 +32,10 @@ variables:
 
 lint:
   extends: .python-lint
+  # Overriding script: drops the template's pinned ruff install (gitops!590);
+  # re-apply the pin so lint does not float on the dev extra's `ruff>=0.1.0`.
   script:
+    - pip install "ruff~=${RUFF_VERSION:-0.14.0}"
     - ruff check src/ tests/
     - ruff format --check src/ tests/
   allow_failure: true
