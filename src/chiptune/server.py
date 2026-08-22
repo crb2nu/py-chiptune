@@ -13,6 +13,7 @@ import base64
 import random
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -25,6 +26,11 @@ app = FastAPI(title="chiptune-api", version="0.1.0")
 
 class MusicGenerationRequest(BaseModel):
     preset: str = "overworld"
+    # "loop" = single-texture N-bar render (legacy). "song"/"short" = structured
+    # multi-section composition (intro/verse/chorus arcs). Custom section lists
+    # override the built-in structures.
+    structure: str = "loop"
+    sections: list[dict[str, Any]] | None = None
     effects: str | None = None
     root: str | None = None
     bpm: int | None = Field(default=None, ge=40, le=300)
@@ -67,6 +73,8 @@ a.dl { color:var(--hot); font-size:12px; }
 <div class="presets" id="presets"></div>
 <div class="row"><label>tempo</label><input type="range" id="bpm" min="60" max="200" value="120"
   oninput="bpmv.value=this.value"><output id="bpmv">120</output></div>
+<div class="row"><label>form</label><select id="structure"><option value="loop" selected>loop</option>
+  <option value="short">short song</option><option value="song">full song</option></select></div>
 <div class="row"><label>bars</label><select id="bars"><option>4</option><option selected>8</option>
   <option>16</option><option>32</option></select>
   <label>fx</label><select id="fx"><option value="">clean</option><option>retro</option><option>space</option>
@@ -91,7 +99,8 @@ document.getElementById("go").onclick = async () => {
   go.disabled = true; st.textContent = "composing\u2026";
   try {
     const body = { preset, bpm: +document.getElementById("bpm").value,
-                   bars: +document.getElementById("bars").value };
+                   bars: +document.getElementById("bars").value,
+                   structure: document.getElementById("structure").value };
     const fx = document.getElementById("fx").value; if (fx) body.effects = fx;
     const r = await fetch("/v1/music/generations", { method: "POST",
       headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -149,6 +158,56 @@ def generate(req: MusicGenerationRequest) -> dict[str, object]:
     seed = req.seed if req.seed is not None else random.randrange(2**32)
     random.seed(seed)
 
+    effects = None
+    if req.effects:
+        effects = getattr(EffectPresets, EFFECT_PRESET_METHODS[req.effects])()
+
+    if req.structure != "loop":
+        import io
+
+        import soundfile as sf
+
+        from chiptune.composer.song import (
+            SongSection,
+            SongSpec,
+            build_song,
+            song_duration_seconds,
+            standard_structure,
+        )
+
+        if req.structure not in ("song", "short") and not req.sections:
+            raise HTTPException(status_code=400, detail="structure must be loop, song, or short")
+        sections = (
+            [SongSection(**sec) for sec in req.sections]
+            if req.sections
+            else standard_structure(req.structure)
+        )
+        spec = SongSpec(
+            preset_factory=req.preset,
+            root=req.root,
+            bpm=req.bpm,
+            seed=seed,
+            sections=sections,
+        )
+        song = build_song(spec, effects=effects)
+        buf = io.BytesIO()
+        sf.write(buf, song, 44100, format="WAV", subtype="PCM_16")
+        return {
+            "data": [
+                {
+                    "b64_json": base64.b64encode(buf.getvalue()).decode(),
+                    "mime_type": "audio/wav",
+                    "preset": req.preset,
+                    "structure": req.structure,
+                    "sections": [sec.name for sec in sections],
+                    "effects": req.effects,
+                    "bpm": req.bpm,
+                    "seed": seed,
+                    "duration": song_duration_seconds(song),
+                }
+            ]
+        }
+
     preset_factory = getattr(GenrePresets, GENRE_PRESET_METHODS[req.preset])
     composer = preset_factory(root=req.root) if req.root else preset_factory()
     if req.bpm:
@@ -162,10 +221,6 @@ def generate(req: MusicGenerationRequest) -> dict[str, object]:
     if req.drums and req.preset not in ("sad", "victory"):
         composer.add_drums()
     track = composer.build()
-
-    effects = None
-    if req.effects:
-        effects = getattr(EffectPresets, EFFECT_PRESET_METHODS[req.effects])()
 
     with tempfile.TemporaryDirectory() as tmp:
         wav_path = Path(tmp) / "track.wav"

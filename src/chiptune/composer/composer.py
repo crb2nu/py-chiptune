@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import random
 from enum import Enum
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel
 
@@ -24,6 +24,27 @@ from chiptune.theory.arpeggios import Arpeggio, ArpeggioPattern, Note
 from chiptune.theory.chords import Chord, ChordProgression
 from chiptune.theory.keys import Key, Mode
 from chiptune.theory.scales import Scale
+
+if TYPE_CHECKING:
+    from chiptune.generation.markov.melody import MelodyStyle
+
+MELODY_STYLE_FACTORIES = {
+    "heroic": "heroic",
+    "mysterious": "mysterious",
+    "playful": "playful",
+    "melancholic": "melancholic",
+    "epic": "epic",
+    "chiptune": "chiptune",
+}
+
+
+def melody_style_factory(name: str) -> MelodyStyle:
+    """Resolve a MelodyStyle by name (default: the generic chiptune style)."""
+    from chiptune.generation.markov.melody import MelodyStyle
+
+    factory = getattr(MelodyStyle, MELODY_STYLE_FACTORIES.get(name, "chiptune"))
+    result: MelodyStyle = factory()
+    return result
 
 
 class BassStyle(str, Enum):
@@ -85,6 +106,9 @@ class ChiptuneComposer(BaseModel):
     length_bars: int = 0
     theme: GameTheme | None = None
     progression: ChordProgression | None = None
+    # Markov melody character (see MELODY_STYLE_FACTORIES); set_mood updates
+    # it when the mood name matches a style.
+    melody_style: str = "chiptune"
 
     # Mood to musical settings mapping
     MOOD_SETTINGS: ClassVar[dict[str, dict[str, Any]]] = {
@@ -149,6 +173,9 @@ class ChiptuneComposer(BaseModel):
             Self for chaining
         """
         settings = self.MOOD_SETTINGS.get(mood.lower(), {})
+
+        if mood.lower() in MELODY_STYLE_FACTORIES:
+            self.melody_style = mood.lower()
 
         if "mode" in settings:
             self.key = Key(root=self.key.root, mode=settings["mode"])
@@ -248,41 +275,95 @@ class ChiptuneComposer(BaseModel):
         total_beats: float,
         octave: int,
     ) -> list[Note]:
-        """Generate melody notes following a contour."""
-        notes: list[Note] = []
-        current_beat = 0.0
+        """Generate melody notes: markov-chain material shaped by the contour.
 
-        # Note duration patterns (in beats)
-        rhythm_patterns = [
-            [1.0, 0.5, 0.5],  # quarter, eighth, eighth
-            [0.5, 0.5, 1.0],  # eighth, eighth, quarter
-            [1.5, 0.5],  # dotted quarter, eighth
-            [0.5, 0.5, 0.5, 0.5],  # four eighths
-            [1.0, 1.0],  # two quarters
-        ]
-
-        # Get scale pitches
+        The contour is a center of gravity, not a rail: note-to-note motion
+        comes from a style-trained markov chain (leaps, repeats, character),
+        and each bar is transposed a few scale steps toward the contour's
+        target for that point in the phrase. The old implementation sampled
+        the contour directly per note, which produced wall-to-wall scale
+        ladders.
+        """
         scale_pitches = scale.get_pitches(octave=octave, num_octaves=2)
+        if not scale_pitches:
+            return []
 
-        while current_beat < total_beats:
-            # Pick a rhythm pattern
-            pattern = random.choice(rhythm_patterns)
+        style = melody_style_factory(self.melody_style)
+        raw = style.generator.generate_in_scale(
+            int(total_beats * 2) + 8,
+            scale_pitches,
+            seed=random.randrange(2**31),
+        )
+        if not raw:
+            return []
 
-            for duration in pattern:
-                if current_beat >= total_beats:
-                    break
+        # Fit the note stream to the requested length.
+        fitted: list[Note] = []
+        beat = 0.0
+        for note in raw:
+            if beat >= total_beats:
+                break
+            duration = min(note.duration, total_beats - beat)
+            fitted.append(
+                Note(
+                    pitch=note.pitch,
+                    duration=duration,
+                    velocity=random.randint(80, 110),
+                )
+            )
+            beat += duration
 
-                # Calculate pitch based on contour
-                progress = current_beat / total_beats
-                pitch_index = self._contour_to_index(contour, progress, len(scale_pitches))
+        # Bar-level contour gravity: nudge each bar toward the contour target.
+        index_of = {pitch: i for i, pitch in enumerate(scale_pitches)}
 
-                pitch = scale_pitches[pitch_index]
-                velocity = random.randint(80, 110)
+        def nearest_index(pitch: int) -> int:
+            return index_of.get(
+                pitch,
+                min(
+                    range(len(scale_pitches)),
+                    key=lambda i: abs(scale_pitches[i] - pitch),
+                ),
+            )
 
-                notes.append(Note(pitch=pitch, duration=duration, velocity=velocity))
-                current_beat += duration
+        shaped: list[Note] = []
+        beat = 0.0
+        bar: list[Note] = []
+        bar_start = 0.0
 
-        return notes
+        def flush_bar() -> None:
+            if not bar:
+                return
+            progress = min(bar_start / total_beats, 1.0)
+            target = self._contour_to_index(contour, progress, len(scale_pitches))
+            mean = sum(nearest_index(n.pitch) for n in bar) / len(bar)
+            shift = max(-3, min(3, round((target - mean) / 2)))
+            for n in bar:
+                idx = max(0, min(len(scale_pitches) - 1, nearest_index(n.pitch) + shift))
+                shaped.append(
+                    Note(
+                        pitch=scale_pitches[idx],
+                        duration=n.duration,
+                        velocity=n.velocity,
+                    )
+                )
+            bar.clear()
+
+        for note in fitted:
+            if beat - bar_start >= 4.0:
+                flush_bar()
+                bar_start = beat
+            bar.append(note)
+            beat += note.duration
+        flush_bar()
+
+        # Cadence: land the phrase on the tonic nearest the final note.
+        if shaped:
+            last = shaped[-1]
+            tonics = [p for i, p in enumerate(scale_pitches) if i % 7 == 0] or [scale_pitches[0]]
+            tonic = min(tonics, key=lambda p: abs(p - last.pitch))
+            shaped[-1] = Note(pitch=tonic, duration=max(last.duration, 1.0), velocity=last.velocity)
+
+        return shaped
 
     def _contour_to_index(self, contour: MelodicContour, progress: float, max_index: int) -> int:
         """Convert contour and progress to scale index."""
