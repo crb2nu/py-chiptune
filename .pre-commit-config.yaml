@@ -13,4 +13,7 @@ repos:
         additional_dependencies:
           - pydantic>=2.0.0
           - types-setuptools
-        args: [--ignore-missing-imports]
+          - fastapi>=0.110
+        # follow-imports=silent: report errors only for the files being
+        # committed, not for baseline modules they import.
+        args: [--ignore-missing-imports, --follow-imports=silent]

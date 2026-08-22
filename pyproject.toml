@@ -34,6 +34,10 @@ dependencies = [
 audio = [
     "sounddevice>=0.4.6",
 ]
+server = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",

@@ -1,0 +1,17 @@
+# chiptune-api: HTTP lane for chiptune generation (see src/chiptune/server.py).
+# Two stages because the package is a maturin/PyO3 build (Rust core).
+
+FROM ghcr.io/pyo3/maturin:latest AS builder
+WORKDIR /build
+COPY . .
+RUN maturin build --release --interpreter python3.12 -o /wheels
+
+FROM python:3.12-slim
+# soundfile needs libsndfile at runtime.
+RUN apt-get update && apt-get install -y --no-install-recommends libsndfile1 \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /wheels /wheels
+RUN pip install --no-cache-dir "$(ls /wheels/*.whl)[server]" && rm -rf /wheels
+EXPOSE 8000
+USER 65534
+CMD ["uvicorn", "chiptune.server:app", "--host", "0.0.0.0", "--port", "8000"]
